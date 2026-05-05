@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Yadon Automotores</title>
+  <link rel="icon" type="image/png" href="/img/logo.png">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="login-screen" id="login-screen">
+  <div class="login-box">
+    <div class="login-logo"><img src="/img/logo.png" alt="Yadon Automotores"></div>
+    <h2>Bienvenido</h2>
+    <p>Ingresá tus credenciales para continuar</p>
+    <input type="text"     id="login-user" placeholder="Usuario" autocomplete="username">
+    <input type="password" id="login-pass" placeholder="Contraseña" autocomplete="current-password"
+           onkeydown="if(event.key==='Enter') doLogin()">
+    <button class="login-btn" onclick="doLogin()">Ingresar</button>
+    <div class="login-error" id="login-error">Usuario o contraseña incorrectos</div>
+  </div>
+</div>
+
+<!-- SIDEBAR -->
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <span class="sidebar-title">YADON AUTOMOTORES</span>
+  </div>
+  <ul class="nav-links">
+    <li><a href="#" class="nav-link active" data-page="dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+        <rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>
+      </svg>Panel
+    </a></li>
+    <li><a href="#" class="nav-link" data-page="cuentas">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/>
+        <path d="M19 8v6M22 11h-6"/>
+      </svg>Cuentas
+    </a></li>
+    <li><a href="#" class="nav-link" data-page="ventas">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+        <polyline points="9 22 9 12 15 12 15 22"/>
+      </svg>Ventas
+    </a></li>
+    <li><a href="#" class="nav-link" data-page="calculadora">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="4" y="2" width="16" height="20" rx="2"/>
+        <line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="16" y2="10"/>
+        <line x1="8" y1="14" x2="11" y2="14"/><line x1="13" y1="14" x2="16" y2="14"/>
+        <line x1="8" y1="18" x2="11" y2="18"/><line x1="13" y1="18" x2="16" y2="18"/>
+      </svg>Calculadora
+    </a></li>
+  </ul>
+  <div class="sidebar-bottom">
+    <button class="logout-btn" onclick="doLogout()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+        <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+      </svg>Salir
+    </button>
+  </div>
+</nav>
+
+<div class="main-wrap">
+  <header class="topbar">
+    <button class="hamburger" onclick="toggleSidebar()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>
+    </button>
+    <span class="topbar-title" id="topbar-title">Panel</span>
+  </header>
+
+  <!-- DASHBOARD -->
+  <div class="page active" id="page-dashboard">
+    <div class="page-header"><h1>Panel general</h1></div>
+    <div class="section-title">Ventas del mes</div>
+    <div id="dash-ventas-mes" style="margin-bottom:1.75rem"></div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+      <div class="section-title" style="margin-bottom:0">Cuentas activas</div>
+      <button class="btn-secondary btn-sm" onclick="exportarXLSTodo()" title="Exportar todas las cuentas a Excel">📊 Exportar todo XLS</button>
+    </div>
+    <div class="clientes-list" id="dashboard-clientes"></div>
+  </div>
+
+  <!-- CUENTAS -->
+  <div class="page" id="page-cuentas">
+    <div id="vista-lista">
+      <div class="page-header">
+        <h1>Cuentas Corrientes</h1>
+        <button class="btn-primary" onclick="abrirNuevoCliente()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Nuevo cliente
+        </button>
+      </div>
+      <div class="search-bar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="search-input" placeholder="Buscar por nombre o auto..." oninput="filtrarClientes()">
+      </div>
+      <div class="clientes-list" id="lista-clientes"></div>
+    </div>
+
+    <div id="vista-cuenta" style="display:none">
+      <div class="page-header">
+        <button class="btn-back" onclick="volverLista()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="15" height="15"><polyline points="15 18 9 12 15 6"/></svg>
+          Volver
+        </button>
+        <div class="cuenta-header-info">
+          <h1 id="cuenta-nombre">—</h1>
+          <span class="cuenta-auto" id="cuenta-auto"></span>
+        </div>
+        <button class="btn-secondary btn-sm" onclick="editarClienteActual()">Editar</button>
+        <button class="btn-secondary btn-sm" onclick="exportarXLS()" title="Exportar a Excel">📊 XLS</button>
+        <button class="btn-primary" onclick="abrirNuevoMovimiento()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Nuevo movimiento
+        </button>
+      </div>
+      <div class="cuenta-resumen" id="cuenta-resumen"></div>
+      <div class="section-title">Historial de movimientos</div>
+      <div class="table-wrap">
+        <table class="mov-table">
+          <thead>
+            <tr>
+              <th>Fecha</th><th>Estado</th><th>Saldo anterior</th><th id="th-interes">Interés</th>
+              <th>Abono</th><th id="th-saldo-nuevo">Saldo nuevo</th><th>Recibo</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="mov-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- VENTAS -->
+  <div class="page" id="page-ventas">
+    <div class="page-header">
+      <h1>Registro de Ventas</h1>
+      <button class="btn-primary" onclick="abrirNuevaVenta()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Nueva venta
+      </button>
+    </div>
+
+    <!-- Selector de mes -->
+    <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.25rem;flex-wrap:wrap">
+      <div class="search-bar" style="margin:0;flex:0 0 auto">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" width="14" height="14">
+          <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
+          <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+        </svg>
+        <input type="month" id="ventas-mes-filtro" onchange="cargarVentas()">
+      </div>
+      <div class="stat-card" style="padding:.7rem 1.1rem;flex:0 0 auto">
+        <div class="stat-body">
+          <div style="font-size:.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.7px">Total del mes</div>
+          <div class="stat-val" id="ventas-total-mes" style="font-size:1.1rem">—</div>
+        </div>
+      </div>
+      <div class="stat-card" style="padding:.7rem 1.1rem;flex:0 0 auto">
+        <div class="stat-body">
+          <div style="font-size:.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.7px">Autos vendidos</div>
+          <div class="stat-val" id="ventas-cant-mes" style="font-size:1.1rem;color:var(--blue)">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="mov-table">
+        <thead>
+          <tr><th>Fecha</th><th>Vehículo</th><th>Comprador</th><th>Precio</th><th>Notas</th><th></th></tr>
+        </thead>
+        <tbody id="ventas-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- CALCULADORA -->
+  <div class="page" id="page-calculadora">
+    <div class="page-header"><h1>Simulador de financiamiento</h1></div>
+    <div class="card" style="max-width:460px;margin-bottom:1.5rem">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Monto a financiar ($)</label>
+          <input type="text" id="calc-monto" placeholder="1.000.000" inputmode="numeric" oninput="fmtInput(this); calcularCuotas()">
+        </div>
+        <div class="form-group">
+          <label>Interés mensual (%)</label>
+          <input type="number" id="calc-tasa" value="6" oninput="calcularCuotas()" min="0.1" step="0.1">
+        </div>
+      </div>
+    </div>
+    <div class="table-wrap" style="max-width:520px">
+      <table class="mov-table">
+        <thead>
+          <tr><th>Plazo</th><th>Int./mes</th><th>Costo total</th><th>Cuota mensual</th></tr>
+        </thead>
+        <tbody id="calc-tbody">
+          <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:1.5rem">Ingresá un monto para calcular</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:.73rem;color:var(--text-muted);margin-top:.75rem">Sistema francés — cuota fija con capital e intereses.</p>
+  </div>
+</div>
+
+<!-- MODAL: Ver/generar recibo -->
+<div class="modal-overlay" id="modal-recibo" onclick="if(event.target===this)cerrarModal('modal-recibo')">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Generar recibo</h2>
+      <button class="modal-close" onclick="cerrarModal('modal-recibo')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="pago-info" id="recibo-info" style="grid-template-columns:1fr 1fr;margin-bottom:1.25rem"></div>
+      <div class="form-group">
+        <label id="recibo-concepto-label">Concepto del recibo</label>
+        <textarea id="recibo-concepto" rows="3" style="resize:none"></textarea>
+        <span class="form-hint" id="recibo-concepto-hint">Podés editar el texto antes de generar el PDF.</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="cerrarModal('modal-recibo')">Cancelar</button>
+      <button class="btn-primary" onclick="generarReciboPDF()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="14" height="14">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Abrir PDF
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Nuevo movimiento -->
+<div class="modal-overlay" id="modal-movimiento" onclick="if(event.target===this)cerrarModal('modal-movimiento')">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Nuevo movimiento</h2>
+      <button class="modal-close" onclick="cerrarModal('modal-movimiento')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="pago-info" id="m-info" style="grid-template-columns:1fr 1fr;margin-bottom:1.25rem"></div>
+      <div class="form-group" style="margin-bottom:1rem">
+        <label>Fecha del movimiento</label>
+        <input type="date" id="m-fecha">
+      </div>
+      <input type="hidden" id="m-estado" value="abono">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1rem">
+        <button id="btn-abono"    class="btn-estado activo" onclick="seleccionarEstado('abono')">
+          <span style="font-size:1.3rem">✅</span><span>Abonó</span>
+        </button>
+        <button id="btn-no-abono" class="btn-estado"        onclick="seleccionarEstado('no-abono')">
+          <span style="font-size:1.3rem">❌</span><span>No abonó</span>
+        </button>
+      </div>
+      <div id="seccion-pago" style="margin-bottom:1rem">
+        <div class="form-group">
+          <label>Monto abonado ($)</label>
+          <input type="text" id="m-pago" placeholder="0" inputmode="numeric" oninput="fmtInput(this); actualizarPreviewPago()">
+        </div>
+      </div>
+      <!-- Recargo por atraso (solo cuotas fijas) -->
+      <div id="seccion-recargo" style="display:none;margin-bottom:1rem;padding:.85rem;background:var(--orange-bg,#fff7ed);border:1px solid var(--orange);border-radius:10px">
+        <div style="font-size:.78rem;font-weight:600;color:var(--orange);margin-bottom:.6rem;text-transform:uppercase;letter-spacing:.04em">⚠ Recargo por atraso</div>
+        <div style="display:grid;grid-template-columns:1fr auto;gap:.5rem;align-items:end">
+          <div class="form-group" style="margin:0">
+            <label style="font-size:.78rem">Porcentaje de recargo (%)</label>
+            <input type="number" id="m-recargo" placeholder="Ej: 2" min="0" max="100" step="0.5" style="font-size:.9rem">
+          </div>
+          <button type="button" onclick="aplicarRecargo()" class="btn-secondary" style="font-size:.8rem;padding:.45rem .8rem;white-space:nowrap">Aplicar recargo</button>
+        </div>
+      </div>
+      <div class="pago-info" id="m-preview" style="display:none;grid-template-columns:1fr 1fr;margin-bottom:1rem"></div>
+      <div class="form-group">
+        <label>Notas (opcional)</label>
+        <input type="text" id="m-notas" placeholder="Ej: Pagó en efectivo, transfirió, etc.">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="cerrarModal('modal-movimiento')">Cancelar</button>
+      <button class="btn-primary"   onclick="confirmarMovimiento()">Guardar movimiento</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Nueva venta -->
+<div class="modal-overlay" id="modal-venta" onclick="if(event.target===this)cerrarModal('modal-venta')">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modal-venta-titulo">Nueva venta</h2>
+      <button class="modal-close" onclick="cerrarModal('modal-venta')">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="v-id">
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>Vehículo *</label>
+          <input type="text" id="v-auto" placeholder="Ej: Toyota Etios 2015 — AB123CD">
+        </div>
+        <div class="form-group">
+          <label>Precio de venta ($) *</label>
+          <input type="text" id="v-precio" placeholder="1.500.000" inputmode="numeric" oninput="fmtInput(this)">
+        </div>
+        <div class="form-group">
+          <label>Fecha de venta</label>
+          <input type="date" id="v-fecha">
+        </div>
+        <div class="form-group full">
+          <label>Comprador</label>
+          <input type="text" id="v-comprador" placeholder="Nombre del comprador (opcional)">
+        </div>
+        <div class="form-group full">
+          <label>Notas</label>
+          <input type="text" id="v-notas" placeholder="Ej: Pagó mitad efectivo, mitad transferencia">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="cerrarModal('modal-venta')">Cancelar</button>
+      <button class="btn-primary" onclick="guardarVenta()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Nuevo/Editar cliente -->
+<div class="modal-overlay" id="modal-cliente" onclick="if(event.target===this)cerrarModal('modal-cliente')">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modal-cliente-titulo">Nuevo cliente</h2>
+      <button class="modal-close" onclick="cerrarModal('modal-cliente')">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="f-id">
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>Nombre y apellido *</label>
+          <input type="text" id="f-nombre" placeholder="Juan García">
+        </div>
+        <div class="form-group">
+          <label>Teléfono</label>
+          <input type="text" id="f-telefono" placeholder="3834 123456">
+        </div>
+        <div class="form-group">
+          <label>DNI</label>
+          <input type="text" id="f-dni" placeholder="28.123.456">
+        </div>
+        <div class="form-group full">
+          <label>Vehículo</label>
+          <input type="text" id="f-auto" placeholder="Toyota Corolla 2020 — AB123CD">
+        </div>
+        <div class="form-separator"></div>
+        <div class="form-group full" id="grupo-saldo">
+          <label>Saldo a financiar ($) *</label>
+          <input type="text" id="f-saldo" placeholder="7.500.000" inputmode="numeric" oninput="fmtInput(this)">
+          <span class="form-hint">Monto pendiente después de la seña.</span>
+        </div>
+        <div class="form-group full">
+          <label>Modalidad de pago</label>
+          <select id="f-modalidad" onchange="cambiarModalidad()">
+            <option value="interes">Saldo con interés mensual (6%)</option>
+            <option value="cuotas">Cuotas fijas en pesos</option>
+          </select>
+        </div>
+        <div id="grupo-cuotas" style="display:none;grid-column:1/-1">
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Monto de la cuota ($)</label>
+              <input type="text" id="f-cuota" placeholder="380.000" inputmode="numeric" oninput="fmtInput(this); calcularTotalCuotas()">
+            </div>
+            <div class="form-group">
+              <label>Cantidad de cuotas</label>
+              <input type="number" id="f-total-cuotas" placeholder="24" min="1" max="120" oninput="calcularTotalCuotas()">
+            </div>
+          </div>
+          <div id="f-total-calculado" style="display:none;margin-top:.6rem;padding:.65rem 1rem;background:#eff6ff;border:1px solid var(--blue);border-radius:8px;font-size:.88rem;font-weight:600;color:var(--blue)"></div>
+        </div>
+        <div class="form-group full">
+          <label>Fecha de inicio</label>
+          <input type="date" id="f-fecha-inicio">
+        </div>
+        <div class="form-group full">
+          <label>Observaciones</label>
+          <textarea id="f-obs" placeholder="Ej: Financió $7.500.000 al 6% mensual. Entregó un 4K como seña."></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="cerrarModal('modal-cliente')">Cancelar</button>
+      <button class="btn-primary" onclick="guardarCliente()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="/js/auth.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

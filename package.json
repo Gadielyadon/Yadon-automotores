@@ -1,0 +1,19 @@
+{
+  "name": "autogest",
+  "version": "1.0.0",
+  "description": "Sistema de gestión de cuentas corrientes para agencia de autos",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "express": "^4.18.2",
+    "pdfkit": "^0.14.0",
+    "sql.js": "^1.10.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
