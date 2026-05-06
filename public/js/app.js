@@ -364,12 +364,16 @@ async function abrirModalRecibo(movId) {
     document.getElementById('recibo-concepto-hint').textContent  = 'Escribí lo que quieras que aparezca en el recibo (opcional).';
   }
 
+  // Pre-llenar fecha con la del movimiento (editable)
+  document.getElementById('recibo-fecha').value = fmtFecha(mov.fecha);
+
   abrirModal('modal-recibo');
 }
 
 function generarReciboPDF() {
   const concepto = encodeURIComponent(document.getElementById('recibo-concepto').value.trim());
-  window.open(`/api/recibo/${_reciboMovId}?concepto=${concepto}`, '_blank');
+  const fecha    = encodeURIComponent(document.getElementById('recibo-fecha').value.trim());
+  window.open(`/api/recibo/${_reciboMovId}?concepto=${concepto}&fecha=${fecha}`, '_blank');
   cerrarModal('modal-recibo');
 }
 

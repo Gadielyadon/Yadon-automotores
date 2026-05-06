@@ -59,7 +59,8 @@ router.get('/:movId', (req, res) => {
   } else {
     conceptoDefault = `Corresponde a cuota del mes de ${mesLabel}`;
   }
-  const concepto = req.query.concepto ? decodeURIComponent(req.query.concepto) : conceptoDefault;
+  const concepto   = req.query.concepto ? decodeURIComponent(req.query.concepto) : conceptoDefault;
+  const fechaManual = req.query.fecha    ? decodeURIComponent(req.query.fecha)    : fmtF(mov.fecha);
 
   const doc    = new PDFDocument({ size: 'A5', margin: 0 });
   const W      = doc.page.width;
@@ -92,7 +93,7 @@ router.get('/:movId', (req, res) => {
   // Fecha + Cliente en la misma zona
   doc.fontSize(8).fillColor(GRIS2).font('Helvetica').text('FECHA', 28, posY);
   doc.fontSize(8).fillColor(GRIS2).font('Helvetica').text('CLIENTE', W/2, posY);
-  doc.fontSize(10).fillColor(NEGRO).font('Helvetica').text(fmtF(mov.fecha), 28, posY + 12);
+  doc.fontSize(10).fillColor(NEGRO).font('Helvetica').text(fechaManual, 28, posY + 12);
   doc.fontSize(10).fillColor(NEGRO).font('Helvetica-Bold').text(cliente.nombre, W/2, posY + 12, { width: W/2 - 28 });
 
   if (cliente.dni) {
@@ -144,12 +145,10 @@ router.get('/:movId', (req, res) => {
   }
 
   if (esCuotas) {
-    filaDet('Cuota mensual', fmtM(cliente.cuota_fija || mov.pago));
-    filaDet('Cuota N°', `${numeroCuota} de ${cliente.total_cuotas}`, AZUL);
     filaDet('Monto abonado', fmtM(mov.pago), VERDE);
-    filaDet('Saldo restante', fmtM(mov.saldo_nuevo), mov.saldo_nuevo > 0 ? ROJO : VERDE);
+    filaDet('Cuota N°', `${numeroCuota} de ${cliente.total_cuotas}`, AZUL);
   } else {
-    // Para interés mensual: solo mostrar monto abonado y saldo restante
+    // Para interés mensual: monto abonado y saldo restante
     filaDet('Monto abonado', fmtM(mov.pago), VERDE);
     filaDet('Saldo restante', fmtM(mov.saldo_nuevo), mov.saldo_nuevo > 0 ? ROJO : VERDE);
   }
@@ -166,7 +165,7 @@ router.get('/:movId', (req, res) => {
   doc.moveTo(0, yPie).lineTo(W, yPie).strokeColor(LINEA).lineWidth(0.5).stroke();
   doc.fontSize(7.5).fillColor(GRIS2).font('Helvetica')
      .text('Yadon Automotores — Catamarca', 0, yPie + 8, { align: 'center' })
-     .text(`Recibo generado el ${fmtFCorta(new Date().toISOString().split('T')[0])}`, 0, yPie + 20, { align: 'center' });
+     .text(`Fecha: ${fechaManual}`, 0, yPie + 20, { align: 'center' });
 
   doc.end();
 });

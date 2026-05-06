@@ -221,6 +221,11 @@
     <div class="modal-body">
       <div class="pago-info" id="recibo-info" style="grid-template-columns:1fr 1fr;margin-bottom:1.25rem"></div>
       <div class="form-group">
+        <label>Fecha del recibo</label>
+        <input type="text" id="recibo-fecha" placeholder="Ej: 05/05/2026">
+        <span class="form-hint">Podés escribir la fecha que quieras que aparezca en el recibo.</span>
+      </div>
+      <div class="form-group">
         <label id="recibo-concepto-label">Concepto del recibo</label>
         <textarea id="recibo-concepto" rows="3" style="resize:none"></textarea>
         <span class="form-hint" id="recibo-concepto-hint">Podés editar el texto antes de generar el PDF.</span>
