@@ -308,8 +308,11 @@ async function cargarMovimientos(clienteId, movsCache) {
       : `<span style="color:var(--text-muted)">—</span>`;
     const saldoClass = m.saldo_nuevo === 0 ? 'monto-verde' : 'monto-rojo';
     const reciboBtn  = (esAbono && m.numero_recibo)
-      ? `<button class="btn-recibo" onclick="abrirModalRecibo(${m.id})">📄 #${m.numero_recibo}</button>`
-      : '—';
+      ? `<div style="display:flex;gap:.3rem;align-items:center">
+           <button class="btn-recibo" onclick="abrirModalRecibo(${m.id})" title="Recibo automático">📄 #${m.numero_recibo}</button>
+           <button class="btn-recibo" onclick="abrirReciboManual(${m.id})" title="Crear recibo manual" style="background:var(--orange-bg);color:var(--orange);border-color:rgba(217,119,6,.2)">✏️</button>
+         </div>`
+      : `<button class="btn-recibo" onclick="abrirReciboManual(null)" style="background:var(--orange-bg);color:var(--orange);border-color:rgba(217,119,6,.2);opacity:.6" title="Crear recibo manual">✏️ Manual</button>`;
     const nota = m.notas ? `<span title="${m.notas}" style="cursor:default">📝</span> ` : '';
 
     return `<tr>
@@ -330,6 +333,38 @@ function mostrarVistaLista() {
   document.getElementById('vista-lista').style.display  = 'block';
   document.getElementById('vista-cuenta').style.display = 'none';
   _clienteActual = null;
+}
+
+// ═══ RECIBO MANUAL ════════════════════════════════════════════════
+function abrirReciboManual(movId) {
+  const c = _clienteActual;
+  const hoy = new Date();
+  const fechaHoy = `${String(hoy.getDate()).padStart(2,'0')}/${String(hoy.getMonth()+1).padStart(2,'0')}/${hoy.getFullYear()}`;
+
+  document.getElementById('rm-cliente').value   = c ? c.nombre : '';
+  document.getElementById('rm-vehiculo').value  = c ? (c.auto_descripcion || '') : '';
+  document.getElementById('rm-fecha').value     = fechaHoy;
+  document.getElementById('rm-concepto').value  = '';
+  document.getElementById('rm-monto').value     = '';
+  document.getElementById('rm-saldo').value     = '';
+  document.getElementById('rm-notas').value     = '';
+  document.getElementById('rm-numero').value    = '';
+  abrirModal('modal-recibo-manual');
+}
+
+function generarReciboManualPDF() {
+  const params = new URLSearchParams({
+    cliente:  document.getElementById('rm-cliente').value.trim(),
+    vehiculo: document.getElementById('rm-vehiculo').value.trim(),
+    fecha:    document.getElementById('rm-fecha').value.trim(),
+    concepto: document.getElementById('rm-concepto').value.trim(),
+    monto:    document.getElementById('rm-monto').value.replace(/\./g,'').replace(',','.'),
+    saldo:    document.getElementById('rm-saldo').value.replace(/\./g,'').replace(',','.'),
+    notas:    document.getElementById('rm-notas').value.trim(),
+    numero:   document.getElementById('rm-numero').value.trim(),
+  });
+  window.open(`/api/recibo-manual?${params.toString()}`, '_blank');
+  cerrarModal('modal-recibo-manual');
 }
 
 // ═══ MODAL RECIBO ═════════════════════════════════════════════════

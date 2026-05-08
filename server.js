@@ -11,6 +11,7 @@ app.use('/api/movimientos', require('./routes/movimientos'));
 app.use('/api/recibo',      require('./routes/recibo'));
 app.use('/api/ventas',      require('./routes/ventas'));
 app.use('/api/exportar',    require('./routes/exportar'));
+app.use('/api/recibo-manual', require('./routes/recibo-manual'));
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
