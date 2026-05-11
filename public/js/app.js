@@ -18,6 +18,7 @@ function getNumVal(id) {
 let _clientes = [];
 let _clienteActual = null;
 let _reciboMovId = null;
+let _guardando = false; // ← protección anti-doble-click global
 
 // ═══ INIT ════════════════════════════════════════════════════════
 function iniciarApp() {
@@ -89,17 +90,40 @@ async function api(url, opts={}) {
   const r = await fetch(url, { headers:{'Content-Type':'application/json'}, ...opts });
   return r.json();
 }
+
+// ── Toast mejorado: más grande, más tiempo, con ícono
 function toast(msg, tipo='ok') {
   const t = document.getElementById('toast');
-  t.textContent = msg;
+  const icono = tipo === 'err' ? '❌ ' : tipo === 'warn' ? '⚠️ ' : '✅ ';
+  t.innerHTML = icono + msg;
   t.className = `toast ${tipo} show`;
-  setTimeout(() => t.classList.remove('show'), 3200);
+  // Errores duran más para que el usuario los vea
+  const duracion = tipo === 'err' ? 5000 : 4000;
+  clearTimeout(t._timeout);
+  t._timeout = setTimeout(() => t.classList.remove('show'), duracion);
 }
+
 function emptyState(msg) {
   return `<div class="empty-state">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
       <circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/>
     </svg><p>${msg}</p></div>`;
+}
+
+// ── Botón con spinner mientras guarda
+function setBtnGuardando(btnId, guardando, textoOriginal) {
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
+  btn.disabled = guardando;
+  btn.innerHTML = guardando
+    ? `<span style="display:inline-flex;align-items:center;gap:.4rem">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+          style="animation:spin .7s linear infinite">
+          <circle cx="12" cy="12" r="10" stroke-opacity=".25"/>
+          <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
+        </svg>Guardando…
+      </span>`
+    : textoOriginal;
 }
 
 // ═══ DASHBOARD ═══════════════════════════════════════════════════
@@ -193,7 +217,6 @@ async function abrirCuenta(id) {
 
   const esCuotas = cliente.modalidad === 'cuotas';
 
-  // ── Calcular cuadritos según modalidad
   const movs = await api(`/api/movimientos/${id}`);
   const cuotasPagadas = movs.filter(m => m.abono === 1).length;
 
@@ -206,7 +229,6 @@ async function abrirCuenta(id) {
   let resumenHTML = '';
 
   if (esCuotas) {
-    // Cuotas fijas: saldo restante = total - cuotas ya pagadas
     const totalFinanciado  = (cliente.cuota_fija || 0) * (cliente.total_cuotas || 0);
     const saldoRestante    = totalFinanciado - (cuotasPagadas * (cliente.cuota_fija || 0));
 
@@ -228,7 +250,6 @@ async function abrirCuenta(id) {
         <div class="r-val" style="color:var(--blue);font-size:.9rem;font-weight:800">${cuotasLabel}</div>
       </div>`;
   } else {
-    // Interés mensual: saldo total acumulado con intereses
     const totalIntereses   = movs.reduce((s, m) => s + (m.interes || 0), 0);
     const saldoTotalConInt = saldoAFinanciar + totalIntereses;
 
@@ -272,7 +293,6 @@ async function cargarMovimientos(clienteId, movsCache) {
   const movs  = movsCache || await api(`/api/movimientos/${clienteId}`);
   const tbody = document.getElementById('mov-tbody');
 
-  // Mostrar/ocultar columnas Interés y Saldo nuevo según modalidad
   const thInteres    = document.getElementById('th-interes');
   const thSaldoNuevo = document.getElementById('th-saldo-nuevo');
   if (thInteres)    thInteres.style.display    = esCuotas ? 'none' : '';
@@ -285,7 +305,6 @@ async function cargarMovimientos(clienteId, movsCache) {
     return;
   }
 
-  // Contar cuotas pagadas para numerarlas
   let contadorCuotas = 0;
   const totalCuotas = cliente ? (cliente.total_cuotas || 0) : 0;
 
@@ -293,7 +312,6 @@ async function cargarMovimientos(clienteId, movsCache) {
     const esAbono   = m.abono === 1;
     if (esAbono) contadorCuotas++;
 
-    // Columna ESTADO — visible y destacada
     let estadoCell;
     if (esCuotas && esAbono) {
       estadoCell = `<td class="estado-cell"><span class="badge-pagado">✓ PAGADO<br><small>Cuota ${contadorCuotas} de ${totalCuotas}</small></span></td>`;
@@ -377,7 +395,6 @@ async function abrirModalRecibo(movId) {
   const esCuotas = _clienteActual.modalidad === 'cuotas';
   const cuotasPagadas = esCuotas ? movs.filter(m => m.abono === 1 && m.id <= movId).length : null;
 
-  // Info resumen del recibo (siempre igual)
   document.getElementById('recibo-info').innerHTML = `
     <div><div class="pi-lbl">Cliente</div><div class="pi-val">${_clienteActual.nombre}</div></div>
     <div><div class="pi-lbl">N° Recibo</div><div class="pi-val">#${mov.numero_recibo}</div></div>
@@ -387,7 +404,6 @@ async function abrirModalRecibo(movId) {
     <div><div class="pi-lbl">Saldo restante</div><div class="pi-val ${mov.saldo_nuevo > 0 ? 'rojo' : 'verde'}">${fmt(mov.saldo_nuevo)}</div></div>
   `;
 
-  // Concepto/observación: para cuotas sugiere texto, para interés lo deja en blanco para escribir libremente
   if (esCuotas) {
     document.getElementById('recibo-concepto').value =
       `Cuota ${cuotasPagadas} de ${_clienteActual.total_cuotas} — ${_clienteActual.auto_descripcion || ''}`;
@@ -399,9 +415,7 @@ async function abrirModalRecibo(movId) {
     document.getElementById('recibo-concepto-hint').textContent  = 'Escribí lo que quieras que aparezca en el recibo (opcional).';
   }
 
-  // Pre-llenar fecha con la del movimiento (editable)
   document.getElementById('recibo-fecha').value = fmtFecha(mov.fecha);
-
   abrirModal('modal-recibo');
 }
 
@@ -422,14 +436,12 @@ function abrirNuevoMovimiento() {
   document.getElementById('m-notas').value = '';
   document.getElementById('m-recargo').value = '';
 
-  // Para cuotas fijas, pre-llenar con el monto de cuota
   if (esCuotas && c.cuota_fija) {
     document.getElementById('m-pago').value = c.cuota_fija.toLocaleString('es-AR').replace(/,/g, '.');
   } else {
     document.getElementById('m-pago').value = '';
   }
 
-  // Mostrar/ocultar campo recargo según modalidad
   const seccionRecargo = document.getElementById('seccion-recargo');
   if (seccionRecargo) seccionRecargo.style.display = esCuotas ? 'block' : 'none';
 
@@ -444,6 +456,11 @@ function abrirNuevoMovimiento() {
     <div><div class="pi-lbl">Con interés</div><div class="pi-val rojo">${fmt(saldoConInt)}</div></div>
     <div><div class="pi-lbl">Fecha</div><div class="pi-val" style="font-size:.85rem">${new Date().toLocaleDateString('es-AR')}</div></div>
   `;
+
+  // Resetear botón por si quedó en estado "guardando" de una operación anterior
+  _guardando = false;
+  setBtnGuardando('btn-confirmar-movimiento', false, 'Guardar movimiento');
+
   seleccionarEstado('abono');
   actualizarPreviewPago();
   abrirModal('modal-movimiento');
@@ -497,27 +514,55 @@ function actualizarPreviewPago() {
   prev.style.display = 'grid';
 }
 
+// ── CONFIRMAR MOVIMIENTO con protección anti-doble-click ──────────
 async function confirmarMovimiento() {
   if (!_clienteActual) return;
+
+  // Bloquear si ya está guardando
+  if (_guardando) return;
+
   const fecha  = document.getElementById('m-fecha').value;
   const estado = document.getElementById('m-estado').value;
   const pago   = getNumVal('m-pago');
   const notas  = document.getElementById('m-notas').value.trim();
+
   if (!fecha) { toast('La fecha es obligatoria', 'err'); return; }
   if (estado === 'abono' && pago <= 0) { toast('Ingresá el monto abonado', 'err'); return; }
+
+  // Activar modo guardando
+  _guardando = true;
+  setBtnGuardando('btn-confirmar-movimiento', true, 'Guardar movimiento');
+
   try {
     const r = await api(`/api/movimientos/${_clienteActual.id}`, {
       method: 'POST', body: JSON.stringify({ fecha, abono: estado === 'abono', pago, notas })
     });
-    if (r.error) { toast(r.error, 'err'); return; }
+
+    if (r.error) {
+      toast(r.error, 'err');
+      _guardando = false;
+      setBtnGuardando('btn-confirmar-movimiento', false, 'Guardar movimiento');
+      return;
+    }
+
+    // Éxito — cerrar modal y mostrar confirmación clara
     cerrarModal('modal-movimiento');
-    toast(estado === 'abono' ? `Pago registrado — Recibo #${r.numero_recibo} ✓` : 'Movimiento registrado ✓');
+    const msgExito = estado === 'abono'
+      ? `Pago de ${fmt(pago)} guardado — Recibo #${r.numero_recibo}`
+      : 'Movimiento registrado correctamente';
+    toast(msgExito, 'ok');
     await abrirCuenta(_clienteActual.id);
-  } catch(e) { toast('Error al guardar', 'err'); }
+
+  } catch(e) {
+    toast('Error de conexión — intentá de nuevo', 'err');
+  } finally {
+    _guardando = false;
+    setBtnGuardando('btn-confirmar-movimiento', false, 'Guardar movimiento');
+  }
 }
 
 async function eliminarMovimiento(id) {
-  if (!confirm('¿Eliminar este movimiento?')) return;
+  if (!confirm('¿Eliminar este movimiento? Esta acción no se puede deshacer.')) return;
   await api(`/api/movimientos/${id}`, { method: 'DELETE' });
   toast('Movimiento eliminado');
   await abrirCuenta(_clienteActual.id);
@@ -643,11 +688,9 @@ function editarClienteActual() {
 function cambiarModalidad() {
   const m = document.getElementById('f-modalidad').value;
   document.getElementById('grupo-cuotas').style.display = m === 'cuotas' ? 'block' : 'none';
-  // Calcular automáticamente el total al cambiar modalidad
   if (m === 'cuotas') calcularTotalCuotas();
 }
 
-// ── NUEVO: calcula el total automáticamente cuando se ingresan cuota y cantidad
 function calcularTotalCuotas() {
   const cuota = getNumVal('f-cuota');
   const cant  = parseInt(document.getElementById('f-total-cuotas').value) || 0;
@@ -657,7 +700,6 @@ function calcularTotalCuotas() {
       const total = cuota * cant;
       totalEl.textContent = `Total financiado: ${fmt(total)}`;
       totalEl.style.display = 'block';
-      // Auto-completar el saldo inicial si está vacío
       const saldoEl = document.getElementById('f-saldo');
       if (saldoEl && (!saldoEl.value || saldoEl.value === '0')) {
         saldoEl.value = total.toLocaleString('es-AR').replace(/,/g, '.');
@@ -676,7 +718,6 @@ async function guardarCliente() {
 
   if (!nombre) { toast('El nombre es obligatorio', 'err'); return; }
 
-  // Para cuotas fijas: calcular saldo_inicial automáticamente si no está puesto
   if (modalidad === 'cuotas') {
     const cuota = getNumVal('f-cuota');
     const cant  = parseInt(document.getElementById('f-total-cuotas').value) || 0;
@@ -721,6 +762,11 @@ function exportarXLS() {
 function exportarXLSTodo() {
   window.open('/api/exportar', '_blank');
 }
+// PDF completo con todos los movimientos — respaldo imprimible
+function exportarPDF() {
+  if (!_clienteActual) return;
+  window.open(`/api/exportar/${_clienteActual.id}/pdf`, '_blank');
+}
 
 // ═══ CALCULADORA ══════════════════════════════════════════════════
 function calcularCuotas() {
@@ -746,4 +792,171 @@ function calcularCuotas() {
 
 // ═══ MODALES ══════════════════════════════════════════════════════
 function abrirModal(id)  { document.getElementById(id).classList.add('open'); }
-function cerrarModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function cerrarModal(id) {
+  // Si se intenta cerrar el modal de movimiento mientras está guardando, bloquearlo
+  if (id === 'modal-movimiento' && _guardando) return;
+  document.getElementById(id).classList.remove('open');
+}
+
+// ═══ MENÚ EXPORTAR ════════════════════════════════════════════════
+function toggleMenuExportar() {
+  const m = document.getElementById('menu-exportar');
+  m.style.display = m.style.display === 'none' ? 'block' : 'none';
+}
+function cerrarMenuExportar() {
+  const m = document.getElementById('menu-exportar');
+  if (m) m.style.display = 'none';
+}
+// Cerrar menú si se hace click afuera
+document.addEventListener('click', e => {
+  const wrap = document.getElementById('menu-exportar-wrap');
+  if (wrap && !wrap.contains(e.target)) cerrarMenuExportar();
+});
+
+// ═══ IMPORTAR MOVIMIENTOS ══════════════════════════════════════════
+let _movimientosAImportar = [];
+
+function abrirImportarMovimientos() {
+  if (!_clienteActual) return;
+  _movimientosAImportar = [];
+  document.getElementById('imp-archivo').value = '';
+  document.getElementById('imp-preview').style.display = 'none';
+  document.getElementById('btn-confirmar-importar').style.display = 'none';
+  abrirModal('modal-importar');
+}
+
+function descargarPlantilla() {
+  // Generar plantilla de ejemplo como CSV descargable
+  const csv = 'fecha,pago,notas\n' +
+    '01/03/2026,143000,Pagó en efectivo\n' +
+    '05/04/2026,143000,Transfirió\n' +
+    '02/05/2026,143000,';
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = 'plantilla-movimientos.csv';
+  a.click(); URL.revokeObjectURL(url);
+}
+
+function previsualizarImportacion() {
+  const file = document.getElementById('imp-archivo').files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      let filas = [];
+
+      if (file.name.endsWith('.csv')) {
+        // Parsear CSV manualmente
+        const text = new TextDecoder('utf-8').decode(new Uint8Array(e.target.result));
+        const lines = text.trim().split('\n').slice(1); // saltar encabezado
+        filas = lines.map(l => {
+          const [fecha, pago, ...resto] = l.split(',');
+          return { fecha: (fecha||'').trim(), pago: (pago||'').trim(), notas: resto.join(',').trim() };
+        });
+      } else {
+        // Parsear XLSX con SheetJS
+        const wb   = XLSX.read(e.target.result, { type: 'array' });
+        const ws   = wb.Sheets[wb.SheetNames[0]];
+        const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+        const rows = data.slice(1); // saltar encabezado
+        filas = rows.map(r => ({
+          fecha: String(r[0] || '').trim(),
+          pago:  String(r[1] || '').trim(),
+          notas: String(r[2] || '').trim(),
+        }));
+      }
+
+      // Validar y parsear cada fila
+      _movimientosAImportar = [];
+      const errores = [];
+
+      filas.forEach((f, i) => {
+        if (!f.fecha && !f.pago) return; // fila vacía, ignorar
+
+        // Parsear fecha — acepta DD/MM/AAAA o AAAA-MM-DD
+        let fechaISO = '';
+        const matchDMY = f.fecha.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+        const matchYMD = f.fecha.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (matchDMY) {
+          fechaISO = `${matchDMY[3]}-${matchDMY[2].padStart(2,'0')}-${matchDMY[1].padStart(2,'0')}`;
+        } else if (matchYMD) {
+          fechaISO = f.fecha;
+        } else {
+          errores.push(`Fila ${i+2}: fecha inválida "${f.fecha}" (usá DD/MM/AAAA)`);
+          return;
+        }
+
+        // Parsear monto
+        const monto = parseFloat(String(f.pago).replace(/\./g,'').replace(',','.'));
+        if (!monto || monto <= 0) {
+          errores.push(`Fila ${i+2}: monto inválido "${f.pago}"`);
+          return;
+        }
+
+        _movimientosAImportar.push({ fecha: fechaISO, pago: monto, notas: f.notas || '' });
+      });
+
+      // Mostrar preview
+      const tbody = document.getElementById('imp-tbody');
+      tbody.innerHTML = _movimientosAImportar.map((m, i) => `<tr>
+        <td>${i+1}</td>
+        <td>${fmtFecha(m.fecha)}</td>
+        <td><span class="monto-verde">${fmt(m.pago)}</span></td>
+        <td style="color:var(--text-muted);font-size:.78rem">${m.notas || '—'}</td>
+        <td><span style="color:#16a34a;font-size:.78rem">✓ OK</span></td>
+      </tr>`).join('');
+
+      const errDiv = document.getElementById('imp-errores');
+      if (errores.length) {
+        errDiv.style.display = 'block';
+        errDiv.innerHTML = '<strong>⚠ Filas con error (se van a omitir):</strong><br>' + errores.join('<br>');
+      } else {
+        errDiv.style.display = 'none';
+      }
+
+      document.getElementById('imp-cant').textContent = _movimientosAImportar.length;
+      document.getElementById('imp-cant-btn').textContent = _movimientosAImportar.length;
+      document.getElementById('imp-preview').style.display = 'block';
+
+      const btnOk = document.getElementById('btn-confirmar-importar');
+      btnOk.style.display = _movimientosAImportar.length > 0 ? 'inline-flex' : 'none';
+
+    } catch(err) {
+      toast('Error al leer el archivo: ' + err.message, 'err');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function confirmarImportacion() {
+  if (!_clienteActual || !_movimientosAImportar.length) return;
+
+  const btn = document.getElementById('btn-confirmar-importar');
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Importando...';
+
+  let ok = 0, errores = 0;
+
+  for (const m of _movimientosAImportar) {
+    try {
+      const r = await api(`/api/movimientos/${_clienteActual.id}`, {
+        method: 'POST',
+        body: JSON.stringify({ fecha: m.fecha, abono: true, pago: m.pago, notas: m.notas })
+      });
+      if (r.error) { errores++; } else { ok++; }
+    } catch(e) { errores++; }
+  }
+
+  cerrarModal('modal-importar');
+
+  if (errores === 0) {
+    toast(`${ok} movimientos importados correctamente ✓`, 'ok');
+  } else {
+    toast(`Importados: ${ok} ✓  |  Errores: ${errores} ✗`, 'warn');
+  }
+
+  await abrirCuenta(_clienteActual.id);
+}

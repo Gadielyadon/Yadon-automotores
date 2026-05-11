@@ -2,33 +2,47 @@ const express = require('express');
 const router  = express.Router();
 const db      = require('../db');
 
-// Listar todos
+// ── Listar todos — UN SOLO JOIN en lugar de 3 queries por cliente ──
 router.get('/', (req, res) => {
-  const clientes = db.query('SELECT * FROM clientes ORDER BY nombre ASC');
-  clientes.forEach(c => {
-    c.saldo_actual = db.saldoActual(c.id);
-    const ult = db.get('SELECT fecha, abono, pago FROM movimientos WHERE cliente_id=? ORDER BY fecha DESC, id DESC LIMIT 1', [c.id]);
-    c.ultimo_movimiento = ult ? ult.fecha : null;
-    c.ultimo_abono = ult ? ult.abono : null;
-  });
+  // Saldo actual = último saldo_nuevo de movimientos, o saldo_inicial si no hay movimientos
+  // Último movimiento = MAX fecha por cliente
+  const clientes = db.query(`
+    SELECT
+      c.*,
+      COALESCE(ult.saldo_nuevo, c.saldo_inicial)  AS saldo_actual,
+      ult.fecha                                    AS ultimo_movimiento,
+      ult.abono                                    AS ultimo_abono
+    FROM clientes c
+    LEFT JOIN (
+      SELECT m.cliente_id, m.saldo_nuevo, m.fecha, m.abono
+      FROM movimientos m
+      INNER JOIN (
+        SELECT cliente_id, MAX(id) AS max_id
+        FROM movimientos
+        GROUP BY cliente_id
+      ) last ON m.id = last.max_id
+    ) ult ON ult.cliente_id = c.id
+    ORDER BY c.nombre ASC
+  `);
   res.json(clientes);
 });
 
-// Obtener uno
+// ── Obtener uno ───────────────────────────────────────────────────
 router.get('/:id', (req, res) => {
   const c = db.get('SELECT * FROM clientes WHERE id=?', [req.params.id]);
   if (!c) return res.status(404).json({ error: 'No encontrado' });
-  c.saldo_actual = db.saldoActual(c.id);
+  c.saldo_actual    = db.saldoActual(c.id);
   c.proximo_interes = db.calcularProximoInteres(c.id);
   res.json(c);
 });
 
-// Crear
+// ── Crear ─────────────────────────────────────────────────────────
 router.post('/', (req, res) => {
   const { nombre, telefono, dni, auto_descripcion, saldo_inicial, modalidad,
           cuota_fija, total_cuotas, observaciones, fecha_inicio } = req.body;
   if (!nombre) return res.status(400).json({ error: 'El nombre es requerido' });
-  if (!saldo_inicial || saldo_inicial <= 0) return res.status(400).json({ error: 'El saldo inicial es requerido' });
+  if (!saldo_inicial || saldo_inicial <= 0)
+    return res.status(400).json({ error: 'El saldo inicial es requerido' });
 
   const r = db.run(
     `INSERT INTO clientes (nombre, telefono, dni, auto_descripcion, saldo_inicial,
@@ -38,11 +52,10 @@ router.post('/', (req, res) => {
      modalidad||'interes', cuota_fija||0, total_cuotas||0,
      observaciones||'', fecha_inicio||new Date().toISOString().split('T')[0]]
   );
-  db.save();
   res.json({ id: r.lastInsertRowid });
 });
 
-// Editar
+// ── Editar ────────────────────────────────────────────────────────
 router.put('/:id', (req, res) => {
   const { nombre, telefono, dni, auto_descripcion, cuota_fija, total_cuotas, observaciones, estado } = req.body;
   db.run(
@@ -51,15 +64,13 @@ router.put('/:id', (req, res) => {
     [nombre, telefono||'', dni||'', auto_descripcion||'',
      cuota_fija||0, total_cuotas||0, observaciones||'', estado||'activo', req.params.id]
   );
-  db.save();
   res.json({ ok: true });
 });
 
-// Eliminar
+// ── Eliminar ──────────────────────────────────────────────────────
 router.delete('/:id', (req, res) => {
   db.run('DELETE FROM movimientos WHERE cliente_id=?', [req.params.id]);
   db.run('DELETE FROM clientes WHERE id=?', [req.params.id]);
-  db.save();
   res.json({ ok: true });
 });
 

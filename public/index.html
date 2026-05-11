@@ -88,7 +88,6 @@
     <div class="page-header"><h1>Panel general</h1></div>
     <div class="section-title">Ventas del mes</div>
     <div id="dash-ventas-mes" style="margin-bottom:1.75rem"></div>
-
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
       <div class="section-title" style="margin-bottom:0">Cuentas activas</div>
       <button class="btn-secondary btn-sm" onclick="exportarXLSTodo()" title="Exportar todas las cuentas a Excel">📊 Exportar todo XLS</button>
@@ -124,12 +123,37 @@
           <span class="cuenta-auto" id="cuenta-auto"></span>
         </div>
         <button class="btn-secondary btn-sm" onclick="editarClienteActual()">Editar</button>
-        <button class="btn-secondary btn-sm" onclick="exportarXLS()" title="Exportar a Excel">📊 XLS</button>
+
+        <!-- Menú exportar con XLS y PDF -->
+        <div style="position:relative;display:inline-block" id="menu-exportar-wrap">
+          <button class="btn-secondary btn-sm" onclick="toggleMenuExportar()" title="Exportar cuenta">
+            📤 Exportar ▾
+          </button>
+          <div id="menu-exportar" style="display:none;position:absolute;right:0;top:110%;background:var(--card-bg,#fff);border:1px solid var(--border,#e2e5ea);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:200;min-width:180px;overflow:hidden">
+            <button onclick="exportarXLS(); cerrarMenuExportar()"
+              style="display:flex;align-items:center;gap:.6rem;width:100%;padding:.75rem 1rem;background:none;border:none;cursor:pointer;font-size:.88rem;color:var(--text,#1a2744);text-align:left"
+              onmouseover="this.style.background='var(--hover-bg,#f8f9fb)'" onmouseout="this.style.background='none'">
+              📊 Exportar a Excel (.xlsx)
+            </button>
+            <button onclick="exportarPDF(); cerrarMenuExportar()"
+              style="display:flex;align-items:center;gap:.6rem;width:100%;padding:.75rem 1rem;background:none;border:none;cursor:pointer;font-size:.88rem;color:var(--text,#1a2744);text-align:left"
+              onmouseover="this.style.background='var(--hover-bg,#f8f9fb)'" onmouseout="this.style.background='none'">
+              📋 Respaldo PDF completo
+            </button>
+          </div>
+        </div>
+
+        <!-- Botón importar -->
+        <button class="btn-secondary btn-sm" onclick="abrirImportarMovimientos()" title="Importar movimientos desde Excel">
+          📥 Importar
+        </button>
+
         <button class="btn-primary" onclick="abrirNuevoMovimiento()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Nuevo movimiento
         </button>
       </div>
+
       <div class="cuenta-resumen" id="cuenta-resumen"></div>
       <div class="section-title">Historial de movimientos</div>
       <div class="table-wrap">
@@ -155,8 +179,6 @@
         Nueva venta
       </button>
     </div>
-
-    <!-- Selector de mes -->
     <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.25rem;flex-wrap:wrap">
       <div class="search-bar" style="margin:0;flex:0 0 auto">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" width="14" height="14">
@@ -178,7 +200,6 @@
         </div>
       </div>
     </div>
-
     <div class="table-wrap">
       <table class="mov-table">
         <thead>
@@ -218,7 +239,8 @@
   </div>
 </div>
 
-<!-- MODAL: Ver/generar recibo -->
+<!-- ═══ MODALES ═══════════════════════════════════════════════════ -->
+
 <!-- MODAL: Recibo Manual -->
 <div class="modal-overlay" id="modal-recibo-manual" onclick="if(event.target===this)cerrarModal('modal-recibo-manual')">
   <div class="modal">
@@ -272,6 +294,7 @@
   </div>
 </div>
 
+<!-- MODAL: Recibo automático -->
 <div class="modal-overlay" id="modal-recibo" onclick="if(event.target===this)cerrarModal('modal-recibo')">
   <div class="modal">
     <div class="modal-header">
@@ -332,7 +355,6 @@
           <input type="text" id="m-pago" placeholder="0" inputmode="numeric" oninput="fmtInput(this); actualizarPreviewPago()">
         </div>
       </div>
-      <!-- Recargo por atraso (solo cuotas fijas) -->
       <div id="seccion-recargo" style="display:none;margin-bottom:1rem;padding:.85rem;background:var(--orange-bg,#fff7ed);border:1px solid var(--orange);border-radius:10px">
         <div style="font-size:.78rem;font-weight:600;color:var(--orange);margin-bottom:.6rem;text-transform:uppercase;letter-spacing:.04em">⚠ Recargo por atraso</div>
         <div style="display:grid;grid-template-columns:1fr auto;gap:.5rem;align-items:end">
@@ -351,7 +373,70 @@
     </div>
     <div class="modal-footer">
       <button class="btn-secondary" onclick="cerrarModal('modal-movimiento')">Cancelar</button>
-      <button class="btn-primary"   onclick="confirmarMovimiento()">Guardar movimiento</button>
+      <button class="btn-primary" id="btn-confirmar-movimiento" onclick="confirmarMovimiento()">Guardar movimiento</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Importar movimientos desde Excel -->
+<div class="modal-overlay" id="modal-importar" onclick="if(event.target===this)cerrarModal('modal-importar')">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <h2>📥 Importar movimientos</h2>
+      <button class="modal-close" onclick="cerrarModal('modal-importar')">×</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Instrucciones -->
+      <div style="background:#eff6ff;border:1px solid var(--blue,#2563eb);border-radius:10px;padding:1rem;margin-bottom:1.25rem;font-size:.84rem;color:#1e3a8a">
+        <div style="font-weight:700;margin-bottom:.5rem">📋 Formato del archivo Excel</div>
+        <div>El archivo debe tener estas columnas en orden (fila 1 = encabezados):</div>
+        <div style="margin-top:.5rem;font-family:monospace;background:#dbeafe;padding:.4rem .7rem;border-radius:6px;font-size:.8rem">
+          fecha | pago | notas
+        </div>
+        <div style="margin-top:.5rem;color:#1e40af">
+          • <strong>fecha</strong>: formato DD/MM/AAAA o AAAA-MM-DD<br>
+          • <strong>pago</strong>: monto numérico (ej: 143000)<br>
+          • <strong>notas</strong>: texto libre, puede estar vacío
+        </div>
+        <button onclick="descargarPlantilla()" class="btn-secondary btn-sm" style="margin-top:.75rem;font-size:.8rem">
+          ⬇ Descargar plantilla de ejemplo
+        </button>
+      </div>
+
+      <!-- Upload -->
+      <div class="form-group">
+        <label>Seleccioná el archivo Excel (.xlsx)</label>
+        <input type="file" id="imp-archivo" accept=".xlsx,.xls,.csv"
+          style="padding:.5rem;border:1px solid var(--border,#e2e5ea);border-radius:8px;width:100%;font-size:.88rem"
+          onchange="previsualizarImportacion()">
+      </div>
+
+      <!-- Preview tabla -->
+      <div id="imp-preview" style="display:none">
+        <div style="font-size:.82rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.5rem">
+          Vista previa — <span id="imp-cant">0</span> movimientos a importar
+        </div>
+        <div class="table-wrap" style="max-height:220px;overflow-y:auto">
+          <table class="mov-table" style="font-size:.82rem">
+            <thead>
+              <tr><th>#</th><th>Fecha</th><th>Monto</th><th>Notas</th><th>Estado</th></tr>
+            </thead>
+            <tbody id="imp-tbody"></tbody>
+          </table>
+        </div>
+        <div id="imp-errores" style="display:none;margin-top:.75rem;padding:.75rem;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;font-size:.82rem;color:#b91c1c"></div>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="cerrarModal('modal-importar')">Cancelar</button>
+      <button class="btn-primary" id="btn-confirmar-importar" onclick="confirmarImportacion()" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="14" height="14">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+        Importar <span id="imp-cant-btn">0</span> movimientos
+      </button>
     </div>
   </div>
 </div>
@@ -466,6 +551,8 @@
 
 <div class="toast" id="toast"></div>
 <script src="/js/auth.js"></script>
+<!-- SheetJS para leer Excel en el navegador (importar movimientos) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="/js/app.js"></script>
 </body>
 </html>
