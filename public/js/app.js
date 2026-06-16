@@ -381,8 +381,28 @@ function generarReciboManualPDF() {
     notas:    document.getElementById('rm-notas').value.trim(),
     numero:   document.getElementById('rm-numero').value.trim(),
   });
-  window.open(`/api/recibo-manual?${params.toString()}`, '_blank');
+  const numero = document.getElementById('rm-numero').value.trim() || 'manual';
+  _descargarReciboPDF(`/api/recibo-manual?${params.toString()}`, `recibo-${numero}.pdf`);
   cerrarModal('modal-recibo-manual');
+}
+
+// Descarga un PDF desde una URL — funciona en celular y desktop
+async function _descargarReciboPDF(url, filename) {
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error('Error al generar el PDF');
+    const blob = await resp.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename;
+    a.target = '_blank';        // fallback: abre en nueva pestaña si no descarga
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(blobUrl); }, 1000);
+  } catch(e) {
+    toast('Error al generar el PDF', 'err');
+  }
 }
 
 // ═══ MODAL RECIBO ═════════════════════════════════════════════════
@@ -422,7 +442,7 @@ async function abrirModalRecibo(movId) {
 function generarReciboPDF() {
   const concepto = encodeURIComponent(document.getElementById('recibo-concepto').value.trim());
   const fecha    = encodeURIComponent(document.getElementById('recibo-fecha').value.trim());
-  window.open(`/api/recibo/${_reciboMovId}?concepto=${concepto}&fecha=${fecha}`, '_blank');
+  _descargarReciboPDF(`/api/recibo/${_reciboMovId}?concepto=${concepto}&fecha=${fecha}`, `recibo-${_reciboMovId}.pdf`);
   cerrarModal('modal-recibo');
 }
 
