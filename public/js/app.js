@@ -382,7 +382,7 @@ function generarReciboManualPDF() {
     numero:   document.getElementById('rm-numero').value.trim(),
   });
   const numero = document.getElementById('rm-numero').value.trim() || 'manual';
-  _descargarReciboPDF(`/api/recibo-manual?${params.toString()}`, `recibo-${numero}.pdf`);
+  _descargarReciboPDF(`/api/recibo-manual?${params.toString()}&pdf=1`, `recibo-${numero}.pdf`);
   cerrarModal('modal-recibo-manual');
 }
 
@@ -442,7 +442,7 @@ async function abrirModalRecibo(movId) {
 function generarReciboPDF() {
   const concepto = encodeURIComponent(document.getElementById('recibo-concepto').value.trim());
   const fecha    = encodeURIComponent(document.getElementById('recibo-fecha').value.trim());
-  _descargarReciboPDF(`/api/recibo/${_reciboMovId}?concepto=${concepto}&fecha=${fecha}`, `recibo-${_reciboMovId}.pdf`);
+  _descargarReciboPDF(`/api/recibo/${_reciboMovId}?concepto=${concepto}&fecha=${fecha}&pdf=1`, `recibo-${_reciboMovId}.pdf`);
   cerrarModal('modal-recibo');
 }
 
