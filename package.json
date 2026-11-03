@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "reset-clave": "node reset-password.js",
     "dev": "nodemon server.js"
   },
   "dependencies": {

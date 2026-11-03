@@ -17,6 +17,8 @@ router.post('/:clienteId', (req, res) => {
   const clienteId = req.params.clienteId;
   const cliente   = db.get('SELECT * FROM clientes WHERE id=?', [clienteId]);
   if (!cliente) return res.status(404).json({ error: 'Cliente no encontrado' });
+  if (cliente.estado === 'archivado')
+    return res.status(409).json({ error: 'La cuenta está archivada. Reactivala para cargar movimientos.' });
 
   const { fecha, abono, pago, notas } = req.body;
   if (!fecha) return res.status(400).json({ error: 'La fecha es requerida' });
@@ -66,6 +68,11 @@ router.post('/:clienteId', (req, res) => {
 
 // Eliminar un movimiento (corrección)
 router.delete('/:id', (req, res) => {
+  const m = db.get(
+    `SELECT c.estado FROM movimientos m JOIN clientes c ON c.id = m.cliente_id WHERE m.id=?`,
+    [req.params.id]);
+  if (m && m.estado === 'archivado')
+    return res.status(409).json({ error: 'La cuenta está archivada. Reactivala para modificar movimientos.' });
   db.run('DELETE FROM movimientos WHERE id=?', [req.params.id]);
   db.save();
   res.json({ ok: true });

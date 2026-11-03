@@ -60,7 +60,27 @@ async function init() {
       clave TEXT PRIMARY KEY,
       valor TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS usuarios (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      usuario       TEXT    NOT NULL UNIQUE,
+      salt          TEXT    NOT NULL,
+      hash          TEXT    NOT NULL,
+      debe_cambiar  INTEGER NOT NULL DEFAULT 0,
+      creado_en     TEXT    DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS sesiones (
+      token_hash  TEXT    PRIMARY KEY,
+      usuario_id  INTEGER NOT NULL,
+      expira      INTEGER NOT NULL
+    );
   `);
+
+  // Migración: fecha en que se archivó la cuenta (solo agrega la columna si falta)
+  const colsClientes = query('PRAGMA table_info(clientes)').map(c => c.name);
+  if (!colsClientes.includes('fecha_archivo'))
+    _db.run("ALTER TABLE clientes ADD COLUMN fecha_archivo TEXT DEFAULT ''");
 
   if (!get("SELECT valor FROM config WHERE clave='ultimo_recibo'"))
     run("INSERT INTO config VALUES ('ultimo_recibo','0')");
@@ -180,7 +200,9 @@ function siguienteRecibo() {
 
 function saldoActual(clienteId) {
   const u = get(
-    'SELECT saldo_nuevo FROM movimientos WHERE cliente_id=? ORDER BY fecha DESC, id DESC LIMIT 1',
+    // Orden por id (orden de carga): cada movimiento arrastra el saldo del anterior.
+    // Ordenar por fecha daba un saldo incorrecto si una fecha se cargaba fuera de orden.
+    'SELECT saldo_nuevo FROM movimientos WHERE cliente_id=? ORDER BY id DESC LIMIT 1',
     [clienteId]
   );
   if (u) return u.saldo_nuevo;

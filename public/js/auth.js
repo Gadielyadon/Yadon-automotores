@@ -1,36 +1,62 @@
-const USERS = {
-  'yadonj': 'JAyadon2026',
-};
-const SESSION_KEY = 'yadon_logged';
+// ─── LOGIN ───────────────────────────────────────────────────────────────────
+// La verificación de usuario y contraseña la hace el SERVIDOR (cookie de sesión segura).
+// Acá no se guarda ninguna contraseña.
 
-function checkLogin() {
-  if (sessionStorage.getItem(SESSION_KEY) === '1') {
-    document.getElementById('login-screen').classList.remove('show');
-    iniciarApp();
-  } else {
-    document.getElementById('login-screen').classList.add('show');
-    setTimeout(() => document.getElementById('login-user').focus(), 100);
-  }
+function mostrarLogin() {
+  document.getElementById('login-screen').classList.add('show');
+  setTimeout(() => document.getElementById('login-user').focus(), 100);
 }
 
-function doLogin() {
-  const user = document.getElementById('login-user').value.trim().toLowerCase();
+function entrarAlSistema(datos) {
+  document.getElementById('login-screen').classList.remove('show');
+  document.getElementById('login-error').classList.remove('show');
+  iniciarApp();
+  // Clave inicial o reseteada: se obliga a elegir una propia
+  if (datos.debe_cambiar) abrirCambioClave(true);
+}
+
+async function checkLogin() {
+  try {
+    const r = await fetch('/api/auth/me');
+    const d = await r.json();
+    if (d.logueado) { entrarAlSistema(d); return; }
+  } catch (e) { /* sin conexión: mostramos el login igual */ }
+  mostrarLogin();
+}
+
+async function doLogin() {
+  const user = document.getElementById('login-user').value.trim();
   const pass = document.getElementById('login-pass').value;
   const err  = document.getElementById('login-error');
-  if (USERS[user] && USERS[user] === pass) {
-    sessionStorage.setItem(SESSION_KEY, '1');
-    document.getElementById('login-screen').classList.remove('show');
-    err.classList.remove('show');
-    iniciarApp();
-  } else {
+  const btn  = document.querySelector('.login-btn');
+
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ usuario: user, clave: pass })
+    });
+    const d = await r.json();
+    if (r.ok && d.ok) {
+      document.getElementById('login-pass').value = '';
+      entrarAlSistema(d);
+    } else {
+      err.textContent = d.error || 'Usuario o contraseña incorrectos';
+      err.classList.add('show');
+      document.getElementById('login-pass').value = '';
+      document.getElementById('login-pass').focus();
+    }
+  } catch (e) {
+    err.textContent = 'No se pudo conectar con el servidor';
     err.classList.add('show');
-    document.getElementById('login-pass').value = '';
-    document.getElementById('login-pass').focus();
+  } finally {
+    btn.disabled = false;
   }
 }
 
-function doLogout() {
-  sessionStorage.removeItem(SESSION_KEY);
+async function doLogout() {
+  try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) {}
   location.reload();
 }
 

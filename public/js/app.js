@@ -19,6 +19,8 @@ let _clientes = [];
 let _clienteActual = null;
 let _reciboMovId = null;
 let _guardando = false; // ← protección anti-doble-click global
+let _origenCuenta = 'cuentas';   // desde dónde se abrió la cuenta: 'cuentas' | 'archivadas'
+let _claveObligatoria = false;   // el cambio de contraseña no se puede cerrar sin completarlo
 
 // ═══ INIT ════════════════════════════════════════════════════════
 function iniciarApp() {
@@ -41,10 +43,11 @@ function navegarA(page) {
     a.classList.toggle('active', a.dataset.page === page));
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById(`page-${page}`).classList.add('active');
-  const titulos = { dashboard:'Panel', cuentas:'Cuentas Corrientes', ventas:'Ventas', calculadora:'Calculadora' };
+  const titulos = { dashboard:'Panel', cuentas:'Cuentas Corrientes', archivadas:'Archivadas', ventas:'Ventas', calculadora:'Calculadora' };
   document.getElementById('topbar-title').textContent = titulos[page] || page;
   if (page === 'dashboard')   cargarDashboard();
   if (page === 'cuentas')     cargarListaClientes();
+  if (page === 'archivadas')  cargarArchivadas();
   if (page === 'ventas')      cargarVentas();
   if (page === 'calculadora') calcularCuotas();
 }
@@ -74,6 +77,11 @@ function mesConcepto(fechaStr) {
   const [y,m] = fechaStr.split('-');
   return `Corresponde a cuota del mes de ${meses[parseInt(m)-1]} de ${y}`;
 }
+// Escapa texto cargado por usuarios antes de meterlo en innerHTML (evita que <, >, & o comillas rompan la pantalla)
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, ch =>
+    ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+}
 function inicialNombre(n) {
   return (n||'?').split(' ').map(p=>p[0]).slice(0,2).join('').toUpperCase();
 }
@@ -88,6 +96,10 @@ function diasDesde(fechaStr) {
 }
 async function api(url, opts={}) {
   const r = await fetch(url, { headers:{'Content-Type':'application/json'}, ...opts });
+  if (r.status === 401) {            // sesión vencida o cerrada → volver al login
+    location.reload();
+    return new Promise(() => {});    // la página se recarga: no seguimos ejecutando código con datos vacíos
+  }
   return r.json();
 }
 
@@ -130,7 +142,8 @@ function setBtnGuardando(btnId, guardando, textoOriginal) {
 async function cargarDashboard() {
   const clientes = await api('/api/clientes');
   _clientes = clientes;
-  const activos = clientes.filter(c => c.estado === 'activo');
+  const activos = clientes.filter(c => c.estado !== 'archivado');
+  actualizarContadorArchivadas();
 
   const hoy = new Date();
   const mesActual = `${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,'0')}`;
@@ -144,8 +157,8 @@ async function cargarDashboard() {
       <thead><tr><th>Fecha</th><th>Vehículo</th><th>Comprador</th><th>Precio</th></tr></thead>
       <tbody>${ventasDelMes.map(v => `<tr>
         <td>${fmtFecha(v.fecha)}</td>
-        <td><strong>${v.auto_desc}</strong></td>
-        <td>${v.comprador || '—'}</td>
+        <td><strong>${esc(v.auto_desc)}</strong></td>
+        <td>${esc(v.comprador || '—')}</td>
         <td><strong style="color:var(--green)">${fmt(v.precio)}</strong></td>
       </tr>`).join('')}</tbody>
     </table></div>`;
@@ -164,30 +177,70 @@ async function cargarListaClientes() {
   mostrarVistaLista();
   const clientes = await api('/api/clientes');
   _clientes = clientes;
-  renderListaClientes(clientes);
+  actualizarContadorArchivadas();
+  filtrarClientes();
 }
 
-function renderListaClientes(lista) {
-  const cont = document.getElementById('lista-clientes');
-  if (!lista.length) {
-    cont.innerHTML = emptyState('No hay clientes. Usá <strong>Nuevo cliente</strong> para agregar uno.');
-    return;
-  }
-  cont.innerHTML = lista.map(clienteCardHTML).join('');
+// Número de cuentas archivadas en el menú lateral y en el panel
+function actualizarContadorArchivadas() {
+  const n = _clientes.filter(c => c.estado === 'archivado').length;
+  const nav = document.getElementById('nav-n-archivadas');
+  const dash = document.getElementById('dash-n-archivadas');
+  if (nav)  nav.textContent  = n || '';
+  if (dash) dash.textContent = n ? `(${n})` : '';
+}
+
+// Dibuja una lista de tarjetas de cliente dentro de un contenedor
+function renderTarjetas(contId, lista, mensajeVacio) {
+  const cont = document.getElementById(contId);
+  cont.innerHTML = lista.length ? lista.map(clienteCardHTML).join('') : emptyState(mensajeVacio);
   cont.querySelectorAll('.cliente-card').forEach(el =>
     el.addEventListener('click', () => abrirCuenta(parseInt(el.dataset.id))));
 }
 
+function coincideBusqueda(c, q) {
+  return c.nombre.toLowerCase().includes(q) || (c.auto_descripcion||'').toLowerCase().includes(q);
+}
+
+function filtrarClientes() {
+  const q = document.getElementById('search-input').value.toLowerCase().trim();
+  const lista = _clientes.filter(c => c.estado !== 'archivado' && coincideBusqueda(c, q));
+  renderTarjetas('lista-clientes', lista, q
+    ? 'No se encontraron cuentas con esa búsqueda.'
+    : 'No hay clientes. Usá <strong>Nuevo cliente</strong> para agregar uno.');
+}
+
+// ═══ ARCHIVADAS ═══════════════════════════════════════════════════
+async function cargarArchivadas() {
+  const clientes = await api('/api/clientes');
+  _clientes = clientes;
+  actualizarContadorArchivadas();
+  filtrarArchivadas();
+}
+
+function filtrarArchivadas() {
+  const q = document.getElementById('search-archivadas').value.toLowerCase().trim();
+  const lista = _clientes.filter(c => c.estado === 'archivado' && coincideBusqueda(c, q));
+  renderTarjetas('lista-archivadas', lista, q
+    ? 'No se encontraron cuentas archivadas con esa búsqueda.'
+    : 'No hay cuentas archivadas. Podés archivar una desde su cuenta con el botón <strong>Archivar</strong>.');
+}
+
 function clienteCardHTML(c) {
   const saldo = c.saldo_actual || 0;
+  const archivada = c.estado === 'archivado';
   const ultimoStr = c.ultimo_movimiento
     ? `Último mov: ${fmtFecha(c.ultimo_movimiento)} (${diasDesde(c.ultimo_movimiento)})`
     : 'Sin movimientos aún';
-  return `<div class="cliente-card" data-id="${c.id}">
-    <div class="cliente-avatar">${inicialNombre(c.nombre)}</div>
+  // Etiquetas: "Saldada" es solo un aviso, la cuenta sigue visible hasta que el usuario la archive
+  const badges =
+    (c.saldada ? `<span class="badge-saldada">✓ SALDADA</span>` : '') +
+    (archivada ? `<span class="badge-archivada">🗄️ ARCHIVADA${c.fecha_archivo ? ' ' + fmtFecha(c.fecha_archivo) : ''}</span>` : '');
+  return `<div class="cliente-card${archivada ? ' archivada' : ''}" data-id="${c.id}">
+    <div class="cliente-avatar">${esc(inicialNombre(c.nombre))}</div>
     <div class="cliente-info">
-      <div class="cliente-nombre">${c.nombre}</div>
-      <div class="cliente-auto">${c.auto_descripcion || 'Sin vehículo cargado'}</div>
+      <div class="cliente-nombre">${esc(c.nombre)}${badges}</div>
+      <div class="cliente-auto">${esc(c.auto_descripcion || 'Sin vehículo cargado')}</div>
       <span style="font-size:.72rem;color:var(--text-muted)">${ultimoStr}</span>
     </div>
     <div class="cliente-saldo">
@@ -195,13 +248,6 @@ function clienteCardHTML(c) {
       <div class="saldo-lbl">saldo actual</div>
     </div>
   </div>`;
-}
-
-function filtrarClientes() {
-  const q = document.getElementById('search-input').value.toLowerCase();
-  renderListaClientes(_clientes.filter(c =>
-    c.nombre.toLowerCase().includes(q) ||
-    (c.auto_descripcion||'').toLowerCase().includes(q)));
 }
 
 // ═══ CUENTA CORRIENTE ════════════════════════════════════════════
@@ -279,12 +325,68 @@ async function abrirCuenta(id) {
   if (cliente.observaciones) {
     resumenHTML += `<div class="resumen-item" style="grid-column:1/-1">
       <div class="r-lbl">Observaciones</div>
-      <div style="font-size:.83rem;color:var(--text-2);margin-top:.3rem">${cliente.observaciones}</div>
+      <div style="font-size:.83rem;color:var(--text-2);margin-top:.3rem">${esc(cliente.observaciones)}</div>
     </div>`;
   }
 
   document.getElementById('cuenta-resumen').innerHTML = resumenHTML;
+  actualizarEstadoCuenta(cliente);
   await cargarMovimientos(id, movs);
+}
+
+// ── Banner + botones según la cuenta esté activa, saldada o archivada
+function actualizarEstadoCuenta(c) {
+  const archivada = c.estado === 'archivado';
+  const banner = document.getElementById('cuenta-banner');
+
+  // Una cuenta archivada se "vive" dentro de la sección Archivadas (menú resaltado y botón Volver)
+  _origenCuenta = archivada ? 'archivadas' : 'cuentas';
+  document.querySelectorAll('.nav-link').forEach(a =>
+    a.classList.toggle('active', a.dataset.page === _origenCuenta));
+  document.getElementById('topbar-title').textContent = archivada ? 'Archivadas' : 'Cuentas Corrientes';
+
+  document.getElementById('btn-archivar').style.display  = archivada ? 'none' : '';
+  document.getElementById('btn-reactivar').style.display = archivada ? '' : 'none';
+  // Las cuentas archivadas son de solo lectura (se pueden ver y exportar, no modificar)
+  document.getElementById('btn-nuevo-mov').style.display = archivada ? 'none' : '';
+  document.getElementById('btn-importar').style.display  = archivada ? 'none' : '';
+
+  if (archivada) {
+    banner.innerHTML = `<div class="cuenta-banner archivada">
+      <span>🗄️ Cuenta archivada${c.fecha_archivo ? ' el ' + fmtFecha(c.fecha_archivo) : ''}. No se pueden cargar ni borrar movimientos, pero podés consultarla, exportarla y generar recibos.</span>
+      <button class="btn-secondary btn-sm" onclick="reactivarClienteActual()">↩️ Reactivar</button>
+    </div>`;
+  } else if (c.saldada) {
+    banner.innerHTML = `<div class="cuenta-banner saldada">
+      <span>✅ Cuenta saldada. Si ya no la necesitás en pantalla, podés archivarla (queda guardada en Archivadas).</span>
+      <button class="btn-primary btn-sm" onclick="archivarClienteActual()">🗄️ Archivar cuenta</button>
+    </div>`;
+  } else {
+    banner.innerHTML = '';
+  }
+}
+
+async function archivarClienteActual() {
+  const c = _clienteActual;
+  if (!c) return;
+  const msg = c.saldada
+    ? `¿Archivar la cuenta de ${c.nombre}?\n\nDeja de aparecer en el panel y en Activas. La vas a encontrar en Cuentas → Archivadas, y podés reactivarla cuando quieras.`
+    : `⚠️ La cuenta de ${c.nombre} todavía tiene saldo pendiente (${fmt(c.saldo_actual)}).\n\n¿Archivarla igual? Podés reactivarla cuando quieras.`;
+  if (!confirm(msg)) return;
+  const r = await api(`/api/clientes/${c.id}/archivar`, { method: 'POST' });
+  if (r.error) { toast(r.error, 'err'); return; }
+  toast('Cuenta archivada ✓ — la encontrás en el menú, sección Archivadas');
+  volverLista();
+}
+
+async function reactivarClienteActual() {
+  const c = _clienteActual;
+  if (!c) return;
+  if (!confirm(`¿Reactivar la cuenta de ${c.nombre}? Vuelve a aparecer en el panel y en Activas.`)) return;
+  const r = await api(`/api/clientes/${c.id}/reactivar`, { method: 'POST' });
+  if (r.error) { toast(r.error, 'err'); return; }
+  toast('Cuenta reactivada ✓');
+  await abrirCuenta(c.id);
 }
 
 async function cargarMovimientos(clienteId, movsCache) {
@@ -331,7 +433,7 @@ async function cargarMovimientos(clienteId, movsCache) {
            <button class="btn-recibo" onclick="abrirReciboManual(${m.id})" title="Crear recibo manual" style="background:var(--orange-bg);color:var(--orange);border-color:rgba(217,119,6,.2)">✏️</button>
          </div>`
       : `<button class="btn-recibo" onclick="abrirReciboManual(null)" style="background:var(--orange-bg);color:var(--orange);border-color:rgba(217,119,6,.2);opacity:.6" title="Crear recibo manual">✏️ Manual</button>`;
-    const nota = m.notas ? `<span title="${m.notas}" style="cursor:default">📝</span> ` : '';
+    const nota = m.notas ? `<span title="${esc(m.notas)}" style="cursor:default">📝</span> ` : '';
 
     return `<tr>
       <td><strong>${fmtFecha(m.fecha)}</strong></td>
@@ -341,13 +443,17 @@ async function cargarMovimientos(clienteId, movsCache) {
       <td>${abonoCell}</td>
       ${!esCuotas ? `<td><span class="${saldoClass}">${fmt(m.saldo_nuevo)}</span></td>` : ''}
       <td>${reciboBtn}</td>
-      <td>${nota}<button class="btn-eliminar" onclick="eliminarMovimiento(${m.id})" title="Eliminar">✕</button></td>
+      <td>${nota}${cliente && cliente.estado === 'archivado' ? '' : `<button class="btn-eliminar" onclick="eliminarMovimiento(${m.id})" title="Eliminar">✕</button>`}</td>
     </tr>`;
   }).join('');
 }
 
-function volverLista() { mostrarVistaLista(); cargarListaClientes(); }
+function volverLista() {
+  if (_origenCuenta === 'archivadas') { navegarA('archivadas'); return; }
+  mostrarVistaLista(); cargarListaClientes();
+}
 function mostrarVistaLista() {
+  _origenCuenta = 'cuentas';
   document.getElementById('vista-lista').style.display  = 'block';
   document.getElementById('vista-cuenta').style.display = 'none';
   _clienteActual = null;
@@ -416,7 +522,7 @@ async function abrirModalRecibo(movId) {
   const cuotasPagadas = esCuotas ? movs.filter(m => m.abono === 1 && m.id <= movId).length : null;
 
   document.getElementById('recibo-info').innerHTML = `
-    <div><div class="pi-lbl">Cliente</div><div class="pi-val">${_clienteActual.nombre}</div></div>
+    <div><div class="pi-lbl">Cliente</div><div class="pi-val">${esc(_clienteActual.nombre)}</div></div>
     <div><div class="pi-lbl">N° Recibo</div><div class="pi-val">#${mov.numero_recibo}</div></div>
     <div><div class="pi-lbl">Fecha</div><div class="pi-val">${fmtFecha(mov.fecha)}</div></div>
     <div><div class="pi-lbl">Monto abonado</div><div class="pi-val verde">${fmt(mov.pago)}</div></div>
@@ -583,7 +689,8 @@ async function confirmarMovimiento() {
 
 async function eliminarMovimiento(id) {
   if (!confirm('¿Eliminar este movimiento? Esta acción no se puede deshacer.')) return;
-  await api(`/api/movimientos/${id}`, { method: 'DELETE' });
+  const r = await api(`/api/movimientos/${id}`, { method: 'DELETE' });
+  if (r.error) { toast(r.error, 'err'); return; }
   toast('Movimiento eliminado');
   await abrirCuenta(_clienteActual.id);
 }
@@ -605,10 +712,10 @@ async function cargarVentas() {
   }
   tbody.innerHTML = ventas.map(v => `<tr>
     <td>${fmtFecha(v.fecha)}</td>
-    <td><strong>${v.auto_desc}</strong></td>
-    <td>${v.comprador || '—'}</td>
+    <td><strong>${esc(v.auto_desc)}</strong></td>
+    <td>${esc(v.comprador || '—')}</td>
     <td><strong style="color:var(--green)">${fmt(v.precio)}</strong></td>
-    <td>${v.notas || '—'}</td>
+    <td>${esc(v.notas || '—')}</td>
     <td>
       <button class="btn-eliminar" onclick="editarVenta(${v.id})" title="Editar" style="color:var(--blue);opacity:.7">✏️</button>
       <button class="btn-eliminar" onclick="eliminarVenta(${v.id})" title="Eliminar">✕</button>
@@ -761,7 +868,6 @@ async function guardarCliente() {
   };
   try {
     if (id) {
-      body.estado = _clienteActual?.estado || 'activo';
       await api(`/api/clientes/${id}`, { method:'PUT', body:JSON.stringify(body) });
       toast('Cliente actualizado ✓');
     } else {
@@ -811,6 +917,39 @@ function calcularCuotas() {
 }
 
 // ═══ MODALES ══════════════════════════════════════════════════════
+// ═══ CAMBIAR CONTRASEÑA ═══════════════════════════════════════════
+function abrirCambioClave(obligatorio) {
+  _claveObligatoria = !!obligatorio;
+  ['clave-actual','clave-nueva','clave-repetir'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('clave-error').style.display = 'none';
+  document.getElementById('clave-aviso').style.display   = obligatorio ? 'block' : 'none';
+  document.getElementById('clave-cerrar').style.display   = obligatorio ? 'none' : '';
+  document.getElementById('clave-cancelar').style.display = obligatorio ? 'none' : '';
+  abrirModal('modal-clave');
+  setTimeout(() => document.getElementById('clave-actual').focus(), 100);
+}
+
+async function guardarCambioClave() {
+  const actual   = document.getElementById('clave-actual').value;
+  const nueva    = document.getElementById('clave-nueva').value;
+  const repetir  = document.getElementById('clave-repetir').value;
+  const err      = document.getElementById('clave-error');
+  const mostrarError = msg => { err.textContent = msg; err.style.display = 'block'; };
+
+  if (!actual)              return mostrarError('Ingresá tu contraseña actual');
+  if (nueva.length < 8)     return mostrarError('La nueva contraseña debe tener al menos 8 caracteres');
+  if (nueva !== repetir)    return mostrarError('Las contraseñas nuevas no coinciden');
+
+  const r = await api('/api/auth/cambiar-clave', {
+    method: 'POST', body: JSON.stringify({ actual, nueva })
+  });
+  if (r.error) return mostrarError(r.error);
+
+  _claveObligatoria = false;
+  cerrarModal('modal-clave');
+  toast('Contraseña actualizada ✓');
+}
+
 function abrirModal(id)  { document.getElementById(id).classList.add('open'); }
 
 function cerrarModal(id) {
@@ -905,14 +1044,14 @@ function previsualizarImportacion() {
         } else if (matchYMD) {
           fechaISO = f.fecha;
         } else {
-          errores.push(`Fila ${i+2}: fecha inválida "${f.fecha}" (usá DD/MM/AAAA)`);
+          errores.push(`Fila ${i+2}: fecha inválida "${esc(f.fecha)}" (usá DD/MM/AAAA)`);
           return;
         }
 
         // Parsear monto
         const monto = parseFloat(String(f.pago).replace(/\./g,'').replace(',','.'));
         if (!monto || monto <= 0) {
-          errores.push(`Fila ${i+2}: monto inválido "${f.pago}"`);
+          errores.push(`Fila ${i+2}: monto inválido "${esc(f.pago)}"`);
           return;
         }
 
@@ -925,7 +1064,7 @@ function previsualizarImportacion() {
         <td>${i+1}</td>
         <td>${fmtFecha(m.fecha)}</td>
         <td><span class="monto-verde">${fmt(m.pago)}</span></td>
-        <td style="color:var(--text-muted);font-size:.78rem">${m.notas || '—'}</td>
+        <td style="color:var(--text-muted);font-size:.78rem">${esc(m.notas || '—')}</td>
         <td><span style="color:#16a34a;font-size:.78rem">✓ OK</span></td>
       </tr>`).join('');
 

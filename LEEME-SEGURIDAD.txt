@@ -1,0 +1,34 @@
+AUTOGEST — LOGIN Y RECUPERACIÓN DE CONTRASEÑA
+==============================================
+
+USUARIO INICIAL
+  Usuario:    yadonj
+  Contraseña: JAyadon2026   (solo la primera vez: el sistema obliga a elegir una propia)
+
+El cliente puede cambiar su contraseña cuando quiera con el botón "Cambiar contraseña"
+del menú lateral (mínimo 8 caracteres).
+
+SI EL CLIENTE OLVIDA LA CONTRASEÑA  (lo hacés vos, en la PC donde corre el sistema)
+  1) Apagá el servidor (Ctrl+C en la ventana donde corre).
+  2) En esa carpeta, ejecutá:
+         npm run reset-clave
+     (o:  node reset-password.js)
+     Genera una contraseña TEMPORAL y la muestra en pantalla.
+  3) Iniciá el servidor de nuevo:  npm start
+  4) Pasale la contraseña temporal al cliente. Al ingresar, el sistema le pide
+     elegir una propia. Todas las sesiones abiertas se cierran.
+
+  Variantes:
+     node reset-password.js otrousuario            → resetea o CREA ese usuario
+     node reset-password.js yadonj MiClave1234      → fija una clave que elegís vos
+
+  IMPORTANTE: el servidor tiene que estar APAGADO. Si está encendido, la herramienta
+  se niega a correr (el servidor pisaría el cambio y se perdería).
+  Antes de cambiar nada, la herramienta deja un backup de la base en /backups.
+
+SEGURIDAD
+  - Las contraseñas se guardan cifradas (scrypt con sal); nadie puede leerlas.
+  - Sin sesión iniciada, el servidor rechaza TODAS las consultas a los datos.
+  - La sesión dura 12 hs y se cierra con "Salir".
+  - Tras 5 intentos fallidos desde una misma PC, se bloquea el ingreso 15 minutos.
+  - Si publicás el sistema en internet, usalo detrás de HTTPS (la cookie se marca "Secure" sola).

@@ -310,13 +310,14 @@ router.get('/:clienteId', async (req, res) => {
 
 // GET /api/exportar  →  XLS de TODAS las cuentas
 router.get('/', async (req, res) => {
-  const clientes = db.query("SELECT * FROM clientes WHERE estado='activo' ORDER BY nombre ASC");
+  // Incluye también las cuentas archivadas (al final y marcadas), para no perder su historial en el respaldo
+  const clientes = db.query("SELECT * FROM clientes ORDER BY (estado='archivado') ASC, nombre ASC");
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Yadon Automotores';
   wb.created = new Date();
 
   const wsRes = wb.addWorksheet('RESUMEN');
-  const hdrRes = wsRes.addRow(['Cliente', 'Vehículo', 'Modalidad', 'Saldo inicial', 'Saldo actual', 'Teléfono']);
+  const hdrRes = wsRes.addRow(['Cliente', 'Vehículo', 'Modalidad', 'Saldo inicial', 'Saldo actual', 'Teléfono', 'Estado']);
   hdrRes.height = 18;
   hdrRes.eachCell(cell => {
     cell.font  = { bold: true, size: 10, color: { argb: BLANC } };
@@ -328,26 +329,33 @@ router.get('/', async (req, res) => {
   clientes.forEach(c => {
     c.saldo_actual    = db.saldoActual(c.id);
     c.proximo_interes = db.calcularProximoInteres(c.id);
-    deudaTotal += c.saldo_actual;
+    const archivada = c.estado === 'archivado';
+    if (!archivada) deudaTotal += c.saldo_actual;
     const modalLabel = c.modalidad === 'cuotas'
       ? `${c.total_cuotas} cuotas de $${(c.cuota_fija||0).toLocaleString('es-AR')}`
       : `Interés ${c.tasa_mensual}% mensual`;
-    const r = wsRes.addRow([c.nombre, c.auto_descripcion||'—', modalLabel, c.saldo_inicial, c.saldo_actual, c.telefono||'—']);
+    const r = wsRes.addRow([c.nombre, c.auto_descripcion||'—', modalLabel, c.saldo_inicial, c.saldo_actual, c.telefono||'—', archivada ? 'Archivada' : 'Activa']);
     r.getCell(4).numFmt = '$#,##0';
     r.getCell(5).numFmt = '$#,##0';
     r.getCell(5).font   = { bold: true, color: { argb: ROJO } };
     r.height = 15;
   });
 
-  const totRow = wsRes.addRow(['TOTAL DEUDA', '', '', '', deudaTotal, '']);
+  const totRow = wsRes.addRow(['TOTAL DEUDA (cuentas activas)', '', '', '', deudaTotal, '', '']);
   totRow.getCell(1).font = { bold: true };
   totRow.getCell(5).numFmt = '$#,##0';
   totRow.getCell(5).font   = { bold: true, color: { argb: ROJO } };
-  wsRes.columns = [{ width: 25 }, { width: 28 }, { width: 28 }, { width: 16 }, { width: 16 }, { width: 15 }];
+  wsRes.columns = [{ width: 25 }, { width: 28 }, { width: 28 }, { width: 16 }, { width: 16 }, { width: 15 }, { width: 14 }];
 
+  // Nombres de hoja únicos (Excel no permite repetidos) y máx. 31 caracteres
+  const usados = new Set(['resumen']);
   clientes.forEach(c => {
     const movs = db.query('SELECT * FROM movimientos WHERE cliente_id=? ORDER BY fecha ASC, id ASC', [c.id]);
-    const sheetName = c.nombre.substring(0, 31).replace(/[:\\/\?\*\[\]]/g, '');
+    const sufijo = c.estado === 'archivado' ? ' (arch)' : '';
+    const base = (c.nombre.replace(/[:\\/\?\*\[\]]/g, '').trim() || 'Cuenta').substring(0, 31 - sufijo.length - 3);
+    let sheetName = base + sufijo, n = 2;
+    while (usados.has(sheetName.toLowerCase())) sheetName = `${base} ${n++}${sufijo}`;
+    usados.add(sheetName.toLowerCase());
     const ws = wb.addWorksheet(sheetName);
     construirHoja(ws, c, movs);
   });

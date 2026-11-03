@@ -48,6 +48,11 @@
         <path d="M19 8v6M22 11h-6"/>
       </svg>Cuentas
     </a></li>
+    <li><a href="#" class="nav-link" data-page="archivadas">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/>
+      </svg>Archivadas <span class="nav-badge" id="nav-n-archivadas"></span>
+    </a></li>
     <li><a href="#" class="nav-link" data-page="ventas">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
@@ -64,6 +69,11 @@
     </a></li>
   </ul>
   <div class="sidebar-bottom">
+    <button class="logout-btn" style="margin-bottom:.5rem" onclick="abrirCambioClave(false)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+      </svg>Cambiar contraseña
+    </button>
     <button class="logout-btn" onclick="doLogout()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -90,7 +100,10 @@
     <div id="dash-ventas-mes" style="margin-bottom:1.75rem"></div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
       <div class="section-title" style="margin-bottom:0">Cuentas activas</div>
-      <button class="btn-secondary btn-sm" onclick="exportarXLSTodo()" title="Exportar todas las cuentas a Excel">📊 Exportar todo XLS</button>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+        <button class="btn-secondary btn-sm" onclick="navegarA('archivadas')" title="Ver cuentas archivadas">🗄️ Archivadas <span id="dash-n-archivadas"></span></button>
+        <button class="btn-secondary btn-sm" onclick="exportarXLSTodo()" title="Exportar todas las cuentas a Excel (incluye archivadas)">📊 Exportar todo XLS</button>
+      </div>
     </div>
     <div class="clientes-list" id="dashboard-clientes"></div>
   </div>
@@ -123,6 +136,8 @@
           <span class="cuenta-auto" id="cuenta-auto"></span>
         </div>
         <button class="btn-secondary btn-sm" onclick="editarClienteActual()">Editar</button>
+        <button class="btn-secondary btn-sm" id="btn-archivar" onclick="archivarClienteActual()" title="Sacar esta cuenta de la pantalla principal y guardarla en Archivadas">🗄️ Archivar</button>
+        <button class="btn-secondary btn-sm" id="btn-reactivar" onclick="reactivarClienteActual()" style="display:none" title="Volver a poner esta cuenta en las activas">↩️ Reactivar</button>
 
         <!-- Menú exportar con XLS y PDF -->
         <div style="position:relative;display:inline-block" id="menu-exportar-wrap">
@@ -144,16 +159,17 @@
         </div>
 
         <!-- Botón importar -->
-        <button class="btn-secondary btn-sm" onclick="abrirImportarMovimientos()" title="Importar movimientos desde Excel">
+        <button class="btn-secondary btn-sm" id="btn-importar" onclick="abrirImportarMovimientos()" title="Importar movimientos desde Excel">
           📥 Importar
         </button>
 
-        <button class="btn-primary" onclick="abrirNuevoMovimiento()">
+        <button class="btn-primary" id="btn-nuevo-mov" onclick="abrirNuevoMovimiento()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Nuevo movimiento
         </button>
       </div>
 
+      <div id="cuenta-banner"></div>
       <div class="cuenta-resumen" id="cuenta-resumen"></div>
       <div class="section-title">Historial de movimientos</div>
       <div class="table-wrap">
@@ -168,6 +184,19 @@
         </table>
       </div>
     </div>
+  </div>
+
+  <!-- ARCHIVADAS -->
+  <div class="page" id="page-archivadas">
+    <div class="page-header"><h1>Cuentas archivadas</h1></div>
+    <p style="font-size:.85rem;color:var(--text-2);margin-bottom:1rem">
+      Cuentas ya saldadas o cerradas. Se pueden consultar y exportar; para volver a usarlas, abrila y tocá <strong>Reactivar</strong>.
+    </p>
+    <div class="search-bar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="search-archivadas" placeholder="Buscar por nombre o auto..." oninput="filtrarArchivadas()">
+    </div>
+    <div class="clientes-list" id="lista-archivadas"></div>
   </div>
 
   <!-- VENTAS -->
@@ -476,6 +505,41 @@
     <div class="modal-footer">
       <button class="btn-secondary" onclick="cerrarModal('modal-venta')">Cancelar</button>
       <button class="btn-primary" onclick="guardarVenta()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Cambiar contraseña -->
+<div class="modal-overlay" id="modal-clave" onclick="if(event.target===this && !_claveObligatoria)cerrarModal('modal-clave')">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Cambiar contraseña</h2>
+      <button class="modal-close" id="clave-cerrar" onclick="cerrarModal('modal-clave')">×</button>
+    </div>
+    <div class="modal-body">
+      <p id="clave-aviso" style="display:none;font-size:.85rem;color:var(--text-2);margin-bottom:1rem">
+        Por seguridad, elegí una contraseña propia antes de continuar.
+      </p>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>Contraseña actual</label>
+          <input type="password" id="clave-actual" autocomplete="current-password">
+        </div>
+        <div class="form-group full">
+          <label>Nueva contraseña (mínimo 8 caracteres)</label>
+          <input type="password" id="clave-nueva" autocomplete="new-password">
+        </div>
+        <div class="form-group full">
+          <label>Repetir nueva contraseña</label>
+          <input type="password" id="clave-repetir" autocomplete="new-password"
+                 onkeydown="if(event.key==='Enter') guardarCambioClave()">
+        </div>
+      </div>
+      <div id="clave-error" style="display:none;color:var(--rojo);font-size:.83rem;margin-top:.75rem;font-weight:600"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" id="clave-cancelar" onclick="cerrarModal('modal-clave')">Cancelar</button>
+      <button class="btn-primary" id="clave-guardar" onclick="guardarCambioClave()">Guardar contraseña</button>
     </div>
   </div>
 </div>
