@@ -5,6 +5,10 @@ const auth    = require('./auth');
 
 const app = express();
 app.disable('x-powered-by');
+// Si el sistema corre detrás de un proxy (nginx, Caddy, Cloudflare…) arrancarlo con TRUST_PROXY=1
+// para que el bloqueo por intentos fallidos use la IP real del visitante y no la del proxy.
+// (Sin proxy, dejarlo sin definir: así nadie puede falsear su IP.)
+if (process.env.TRUST_PROXY) app.set('trust proxy', parseInt(process.env.TRUST_PROXY, 10) || 1);
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY'); // que no se pueda embeber en otra página

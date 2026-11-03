@@ -81,6 +81,8 @@ async function init() {
   const colsClientes = query('PRAGMA table_info(clientes)').map(c => c.name);
   if (!colsClientes.includes('fecha_archivo'))
     _db.run("ALTER TABLE clientes ADD COLUMN fecha_archivo TEXT DEFAULT ''");
+  if (!colsClientes.includes('motivo_archivo'))
+    _db.run("ALTER TABLE clientes ADD COLUMN motivo_archivo TEXT DEFAULT ''");
 
   if (!get("SELECT valor FROM config WHERE clave='ultimo_recibo'"))
     run("INSERT INTO config VALUES ('ultimo_recibo','0')");

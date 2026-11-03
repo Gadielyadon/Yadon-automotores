@@ -100,8 +100,13 @@ router.put('/:id', (req, res) => {
 router.post('/:id/archivar', (req, res) => {
   const c = db.get('SELECT id, estado FROM clientes WHERE id=?', [req.params.id]);
   if (!c) return res.status(404).json({ error: 'No encontrado' });
+  // El motivo es obligatorio (ej: "Saldada", "Duplicada" o un texto libre)
+  const motivo = String(req.body.motivo || '').trim().replace(/\s+/g, ' ');
+  if (!motivo) return res.status(400).json({ error: 'Indicá el motivo del archivado' });
+  if (motivo.length > 100) return res.status(400).json({ error: 'El motivo es muy largo (máximo 100 caracteres)' });
   if (c.estado !== 'archivado')
-    db.run("UPDATE clientes SET estado='archivado', fecha_archivo=? WHERE id=?", [hoyLocal(), c.id]);
+    db.run("UPDATE clientes SET estado='archivado', fecha_archivo=?, motivo_archivo=? WHERE id=?",
+      [hoyLocal(), motivo, c.id]);
   res.json({ ok: true });
 });
 
@@ -109,7 +114,7 @@ router.post('/:id/archivar', (req, res) => {
 router.post('/:id/reactivar', (req, res) => {
   const c = db.get('SELECT id FROM clientes WHERE id=?', [req.params.id]);
   if (!c) return res.status(404).json({ error: 'No encontrado' });
-  db.run("UPDATE clientes SET estado='activo', fecha_archivo='' WHERE id=?", [c.id]);
+  db.run("UPDATE clientes SET estado='activo', fecha_archivo='', motivo_archivo='' WHERE id=?", [c.id]);
   res.json({ ok: true });
 });
 

@@ -8,15 +8,16 @@ USUARIO INICIAL
 El cliente puede cambiar su contraseña cuando quiera con el botón "Cambiar contraseña"
 del menú lateral (mínimo 8 caracteres).
 
-SI EL CLIENTE OLVIDA LA CONTRASEÑA  (lo hacés vos, en la PC donde corre el sistema)
-  1) Apagá el servidor (Ctrl+C en la ventana donde corre).
-  2) En esa carpeta, ejecutá:
-         npm run reset-clave
-     (o:  node reset-password.js)
-     Genera una contraseña TEMPORAL y la muestra en pantalla.
-  3) Iniciá el servidor de nuevo:  npm start
-  4) Pasale la contraseña temporal al cliente. Al ingresar, el sistema le pide
-     elegir una propia. Todas las sesiones abiertas se cierran.
+SI EL CLIENTE OLVIDA LA CONTRASEÑA  (lo hacés vos, en la VPS / PC donde corre el sistema)
+  Con pm2 (VPS):
+     pm2 stop autogest
+     cd /ruta/del/proyecto          (la ves con:  pm2 describe autogest  → "exec cwd")
+     npm run reset-clave            → muestra una contraseña TEMPORAL
+     pm2 start autogest
+  Sin pm2:  apagá el servidor (Ctrl+C), corré  npm run reset-clave  y volvé a iniciarlo con  npm start.
+
+  Pasale la contraseña temporal al cliente. Al ingresar, el sistema le pide elegir una propia.
+  Todas las sesiones abiertas se cierran.
 
   Variantes:
      node reset-password.js otrousuario            → resetea o CREA ese usuario
@@ -25,6 +26,13 @@ SI EL CLIENTE OLVIDA LA CONTRASEÑA  (lo hacés vos, en la PC donde corre el sis
   IMPORTANTE: el servidor tiene que estar APAGADO. Si está encendido, la herramienta
   se niega a correr (el servidor pisaría el cambio y se perdería).
   Antes de cambiar nada, la herramienta deja un backup de la base en /backups.
+  (Si arrancás el sistema con un puerto distinto al 3005, corré:  PORT=XXXX npm run reset-clave)
+
+PROXY (nginx, etc.)
+  Si el sistema está detrás de un proxy, arrancalo con la variable TRUST_PROXY=1; si no, el bloqueo
+  por intentos fallidos vería a todos los visitantes como una sola IP.
+  Con pm2:   TRUST_PROXY=1 pm2 restart autogest --update-env
+  El proxy debe enviar los encabezados X-Forwarded-For y X-Forwarded-Proto.
 
 SEGURIDAD
   - Las contraseñas se guardan cifradas (scrypt con sal); nadie puede leerlas.

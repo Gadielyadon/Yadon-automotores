@@ -175,6 +175,7 @@ async function cargarDashboard() {
 // ═══ LISTA CLIENTES ═══════════════════════════════════════════════
 async function cargarListaClientes() {
   mostrarVistaLista();
+  document.getElementById('lista-clientes').innerHTML = '';   // evita mostrar un instante la lista vieja
   const clientes = await api('/api/clientes');
   _clientes = clientes;
   actualizarContadorArchivadas();
@@ -199,7 +200,9 @@ function renderTarjetas(contId, lista, mensajeVacio) {
 }
 
 function coincideBusqueda(c, q) {
-  return c.nombre.toLowerCase().includes(q) || (c.auto_descripcion||'').toLowerCase().includes(q);
+  return c.nombre.toLowerCase().includes(q) ||
+         (c.auto_descripcion||'').toLowerCase().includes(q) ||
+         (c.motivo_archivo||'').toLowerCase().includes(q);
 }
 
 function filtrarClientes() {
@@ -212,6 +215,7 @@ function filtrarClientes() {
 
 // ═══ ARCHIVADAS ═══════════════════════════════════════════════════
 async function cargarArchivadas() {
+  document.getElementById('lista-archivadas').innerHTML = ''; // evita mostrar un instante la lista vieja
   const clientes = await api('/api/clientes');
   _clientes = clientes;
   actualizarContadorArchivadas();
@@ -224,6 +228,12 @@ function filtrarArchivadas() {
   renderTarjetas('lista-archivadas', lista, q
     ? 'No se encontraron cuentas archivadas con esa búsqueda.'
     : 'No hay cuentas archivadas. Podés archivar una desde su cuenta con el botón <strong>Archivar</strong>.');
+}
+
+// Motivo del archivado, grande y a la vista en la tarjeta
+function motivoTarjetaHTML(motivo) {
+  if (!motivo) return `<div class="cliente-motivo sin-motivo"><span class="motivo-lbl">Motivo</span><span class="motivo-txt">Sin motivo registrado</span></div>`;
+  return `<div class="cliente-motivo"><span class="motivo-lbl">Motivo</span><span class="motivo-txt">${esc(motivo)}</span></div>`;
 }
 
 function clienteCardHTML(c) {
@@ -243,6 +253,7 @@ function clienteCardHTML(c) {
       <div class="cliente-auto">${esc(c.auto_descripcion || 'Sin vehículo cargado')}</div>
       <span style="font-size:.72rem;color:var(--text-muted)">${ultimoStr}</span>
     </div>
+    ${archivada ? motivoTarjetaHTML(c.motivo_archivo) : ''}
     <div class="cliente-saldo">
       <div class="saldo-num">${fmt(saldo)}</div>
       <div class="saldo-lbl">saldo actual</div>
@@ -353,7 +364,7 @@ function actualizarEstadoCuenta(c) {
 
   if (archivada) {
     banner.innerHTML = `<div class="cuenta-banner archivada">
-      <span>🗄️ Cuenta archivada${c.fecha_archivo ? ' el ' + fmtFecha(c.fecha_archivo) : ''}. No se pueden cargar ni borrar movimientos, pero podés consultarla, exportarla y generar recibos.</span>
+      <span>🗄️ Cuenta archivada${c.fecha_archivo ? ' el ' + fmtFecha(c.fecha_archivo) : ''}${c.motivo_archivo ? ' — Motivo: <strong>' + esc(c.motivo_archivo) + '</strong>' : ''}. No se pueden cargar ni borrar movimientos, pero podés consultarla, exportarla y generar recibos.</span>
       <button class="btn-secondary btn-sm" onclick="reactivarClienteActual()">↩️ Reactivar</button>
     </div>`;
   } else if (c.saldada) {
@@ -366,15 +377,42 @@ function actualizarEstadoCuenta(c) {
   }
 }
 
-async function archivarClienteActual() {
+// Abre el cuadro para escribir el motivo del archivado
+function archivarClienteActual() {
   const c = _clienteActual;
   if (!c) return;
-  const msg = c.saldada
-    ? `¿Archivar la cuenta de ${c.nombre}?\n\nDeja de aparecer en el panel y en Activas. La vas a encontrar en Cuentas → Archivadas, y podés reactivarla cuando quieras.`
-    : `⚠️ La cuenta de ${c.nombre} todavía tiene saldo pendiente (${fmt(c.saldo_actual)}).\n\n¿Archivarla igual? Podés reactivarla cuando quieras.`;
-  if (!confirm(msg)) return;
-  const r = await api(`/api/clientes/${c.id}/archivar`, { method: 'POST' });
-  if (r.error) { toast(r.error, 'err'); return; }
+  document.getElementById('archivar-texto').innerHTML =
+    `Vas a archivar la cuenta de <strong>${esc(c.nombre)}</strong>. Deja de aparecer en el panel y en Cuentas; la encontrás en <strong>Archivadas</strong> y podés reactivarla cuando quieras.`;
+  const aviso = document.getElementById('archivar-aviso');
+  if (c.saldada) {
+    aviso.style.display = 'none';
+  } else {
+    aviso.textContent = `⚠️ Esta cuenta todavía tiene saldo pendiente (${fmt(c.saldo_actual)}).`;
+    aviso.style.display = 'block';
+  }
+  // Si ya está saldada, se sugiere "Saldada" (se puede borrar o cambiar)
+  document.getElementById('archivar-motivo').value = c.saldada ? 'Saldada' : '';
+  document.getElementById('archivar-error').style.display = 'none';
+  abrirModal('modal-archivar');
+  setTimeout(() => {
+    const inp = document.getElementById('archivar-motivo');
+    inp.focus(); inp.select();
+  }, 100);
+}
+
+async function confirmarArchivar() {
+  const c = _clienteActual;
+  if (!c) return;
+  const motivo = document.getElementById('archivar-motivo').value.trim();
+  const err = document.getElementById('archivar-error');
+  if (!motivo) {
+    err.textContent = 'Escribí el motivo del archivado';
+    err.style.display = 'block';
+    return;
+  }
+  const r = await api(`/api/clientes/${c.id}/archivar`, { method: 'POST', body: JSON.stringify({ motivo }) });
+  if (r.error) { err.textContent = r.error; err.style.display = 'block'; return; }
+  cerrarModal('modal-archivar');
   toast('Cuenta archivada ✓ — la encontrás en el menú, sección Archivadas');
   volverLista();
 }

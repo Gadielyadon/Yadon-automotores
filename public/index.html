@@ -509,6 +509,33 @@
   </div>
 </div>
 
+<!-- MODAL: Archivar cuenta -->
+<div class="modal-overlay" id="modal-archivar" onclick="if(event.target===this)cerrarModal('modal-archivar')">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Archivar cuenta</h2>
+      <button class="modal-close" onclick="cerrarModal('modal-archivar')">×</button>
+    </div>
+    <div class="modal-body">
+      <p id="archivar-texto" style="font-size:.88rem;color:var(--text-2);margin-bottom:.9rem"></p>
+      <div id="archivar-aviso" style="display:none;background:var(--orange-bg);color:var(--orange);border-radius:8px;padding:.6rem .8rem;font-size:.84rem;font-weight:600;margin-bottom:.9rem"></div>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>Motivo del archivado</label>
+          <input type="text" id="archivar-motivo" maxlength="100" autocomplete="off"
+                 placeholder="Ej: Saldada, Duplicada, Se devolvió el vehículo…"
+                 onkeydown="if(event.key==='Enter') confirmarArchivar()">
+        </div>
+      </div>
+      <div id="archivar-error" style="display:none;color:var(--rojo);font-size:.83rem;margin-top:.75rem;font-weight:600"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="cerrarModal('modal-archivar')">Cancelar</button>
+      <button class="btn-primary" onclick="confirmarArchivar()">🗄️ Archivar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: Cambiar contraseña -->
 <div class="modal-overlay" id="modal-clave" onclick="if(event.target===this && !_claveObligatoria)cerrarModal('modal-clave')">
   <div class="modal">

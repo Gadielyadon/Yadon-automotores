@@ -501,3 +501,21 @@ a { text-decoration: none; color: inherit; }
 .cuenta-banner.archivada { background: #e5e7eb; border: 1.5px solid #9ca3af; color: #1f2937; }
 .cuenta-banner button { white-space: nowrap; }
 
+/* Motivo del archivado en la tarjeta: grande y bien visible */
+.cliente-motivo {
+  flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  margin: 0 2.2rem 0 1rem; padding: .45rem 1.3rem; min-width: 150px; max-width: 300px;
+  border-radius: 12px; border: 2px solid; text-align: center;
+  background: #e0e7ff; border-color: #818cf8; color: #312e81;
+}
+.motivo-lbl { font-size: .62rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; opacity: .75; }
+.motivo-txt { font-size: 1.2rem; font-weight: 800; line-height: 1.2; overflow-wrap: anywhere; }
+.cliente-motivo.sin-motivo { background: #f3f4f6; border-color: #d1d5db; color: #6b7280; border-style: dashed; }
+.cliente-motivo.sin-motivo .motivo-txt { font-size: .85rem; font-weight: 600; }
+@media (max-width: 640px) {
+  .cliente-card { flex-wrap: wrap; }
+  /* en celular el nombre y sus etiquetas (SALDADA / ARCHIVADA) pueden bajar de renglón en vez de cortarse */
+  .cliente-nombre { white-space: normal; overflow: visible; text-overflow: clip; }
+  .cliente-nombre .badge-saldada, .cliente-nombre .badge-archivada { margin-left: 0; margin-right: .4rem; margin-top: .2rem; }
+  .cliente-motivo { order: 5; flex-basis: 100%; max-width: none; margin: .5rem 0 0; }
+}

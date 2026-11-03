@@ -334,7 +334,7 @@ router.get('/', async (req, res) => {
     const modalLabel = c.modalidad === 'cuotas'
       ? `${c.total_cuotas} cuotas de $${(c.cuota_fija||0).toLocaleString('es-AR')}`
       : `Interés ${c.tasa_mensual}% mensual`;
-    const r = wsRes.addRow([c.nombre, c.auto_descripcion||'—', modalLabel, c.saldo_inicial, c.saldo_actual, c.telefono||'—', archivada ? 'Archivada' : 'Activa']);
+    const r = wsRes.addRow([c.nombre, c.auto_descripcion||'—', modalLabel, c.saldo_inicial, c.saldo_actual, c.telefono||'—', archivada ? 'Archivada' + (c.motivo_archivo ? ' – ' + c.motivo_archivo : '') : 'Activa']);
     r.getCell(4).numFmt = '$#,##0';
     r.getCell(5).numFmt = '$#,##0';
     r.getCell(5).font   = { bold: true, color: { argb: ROJO } };
