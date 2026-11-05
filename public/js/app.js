@@ -38,13 +38,18 @@ function iniciarApp() {
   navegarA('dashboard');
 }
 
-function navegarA(page) {
+// Cambia de pantalla (menú resaltado, título y página visible) SIN cargar datos
+function mostrarPagina(page) {
   document.querySelectorAll('.nav-link').forEach(a =>
     a.classList.toggle('active', a.dataset.page === page));
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById(`page-${page}`).classList.add('active');
   const titulos = { dashboard:'Panel', cuentas:'Cuentas Corrientes', archivadas:'Archivadas', ventas:'Ventas', calculadora:'Calculadora' };
   document.getElementById('topbar-title').textContent = titulos[page] || page;
+}
+
+function navegarA(page) {
+  mostrarPagina(page);
   if (page === 'dashboard')   cargarDashboard();
   if (page === 'cuentas')     cargarListaClientes();
   if (page === 'archivadas')  cargarArchivadas();
@@ -81,6 +86,18 @@ function mesConcepto(fechaStr) {
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, ch =>
     ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+}
+// Enfoca un campo al abrir una ventana, pero SOLO si el usuario todavía no eligió ninguno
+// (antes se le robaba el cursor a quien ya había empezado a escribir en otro campo).
+function enfocarSiNadie(id, modalId) {
+  setTimeout(() => {
+    const modal = document.getElementById(modalId);
+    const act = document.activeElement;
+    if (!act || act === document.body || !modal || !modal.contains(act)) {
+      const el = document.getElementById(id);
+      if (el) { el.focus(); if (el.tagName === 'INPUT' && el.type === 'text') el.select(); }  // texto sugerido queda seleccionado
+    }
+  }, 100);
 }
 function inicialNombre(n) {
   return (n||'?').split(' ').map(p=>p[0]).slice(0,2).join('').toUpperCase();
@@ -263,8 +280,14 @@ function clienteCardHTML(c) {
 
 // ═══ CUENTA CORRIENTE ════════════════════════════════════════════
 async function abrirCuenta(id) {
-  navegarA('cuentas');
-  const cliente = await api(`/api/clientes/${id}`);
+  // Se piden la cuenta y sus movimientos JUNTOS y no se toca la pantalla hasta que llegaron los dos:
+  // antes se veía el nombre del cliente nuevo con los números y la tabla del cliente anterior.
+  const [cliente, movs] = await Promise.all([
+    api(`/api/clientes/${id}`),
+    api(`/api/movimientos/${id}`)
+  ]);
+  if (!cliente || cliente.error) { toast((cliente && cliente.error) || 'No se pudo abrir la cuenta', 'err'); return; }
+  mostrarPagina('cuentas');
   _clienteActual = cliente;
 
   document.getElementById('vista-lista').style.display = 'none';
@@ -274,20 +297,23 @@ async function abrirCuenta(id) {
 
   const esCuotas = cliente.modalidad === 'cuotas';
 
-  const movs = await api(`/api/movimientos/${id}`);
   const cuotasPagadas = movs.filter(m => m.abono === 1).length;
 
   const saldoAFinanciar = cliente.saldo_inicial;
-  const cuotasLabel     = `Cuota ${cuotasPagadas} de ${cliente.total_cuotas}`;
+  // Cuentas en cuotas SIN plan cargado (0 cuotas de $0): se muestran como "pagos libres" en vez de "Cuota 7 de 0"
+  const hayPlan = esCuotas && (cliente.cuota_fija || 0) > 0 && (cliente.total_cuotas || 0) > 0;
+  const cuotasLabel     = hayPlan
+    ? `Cuota ${cuotasPagadas} de ${cliente.total_cuotas}`
+    : `${cuotasPagadas} pago${cuotasPagadas === 1 ? '' : 's'} realizado${cuotasPagadas === 1 ? '' : 's'}`;
   const modalLabel      = esCuotas
-    ? `${cliente.total_cuotas} cuotas de ${fmt(cliente.cuota_fija)}`
+    ? (hayPlan ? `${cliente.total_cuotas} cuotas de ${fmt(cliente.cuota_fija)}` : 'Pagos libres (sin cuotas fijas)')
     : `Interés ${cliente.tasa_mensual}% mensual`;
 
   let resumenHTML = '';
 
   if (esCuotas) {
     const totalFinanciado  = (cliente.cuota_fija || 0) * (cliente.total_cuotas || 0);
-    const saldoRestante    = totalFinanciado - (cuotasPagadas * (cliente.cuota_fija || 0));
+    const saldoRestante    = hayPlan ? totalFinanciado - (cuotasPagadas * (cliente.cuota_fija || 0)) : cliente.saldo_actual;
 
     resumenHTML = `
       <div class="resumen-item">
@@ -362,19 +388,36 @@ function actualizarEstadoCuenta(c) {
   document.getElementById('btn-nuevo-mov').style.display = archivada ? 'none' : '';
   document.getElementById('btn-importar').style.display  = archivada ? 'none' : '';
 
+  let html = '';
   if (archivada) {
-    banner.innerHTML = `<div class="cuenta-banner archivada">
+    html = `<div class="cuenta-banner archivada">
       <span>🗄️ Cuenta archivada${c.fecha_archivo ? ' el ' + fmtFecha(c.fecha_archivo) : ''}${c.motivo_archivo ? ' — Motivo: <strong>' + esc(c.motivo_archivo) + '</strong>' : ''}. No se pueden cargar ni borrar movimientos, pero podés consultarla, exportarla y generar recibos.</span>
       <button class="btn-secondary btn-sm" onclick="reactivarClienteActual()">↩️ Reactivar</button>
     </div>`;
-  } else if (c.saldada) {
-    banner.innerHTML = `<div class="cuenta-banner saldada">
+  } else {
+    if (c.saldada) {
+      html += `<div class="cuenta-banner saldada">
       <span>✅ Cuenta saldada. Si ya no la necesitás en pantalla, podés archivarla (queda guardada en Archivadas).</span>
       <button class="btn-primary btn-sm" onclick="archivarClienteActual()">🗄️ Archivar cuenta</button>
     </div>`;
-  } else {
-    banner.innerHTML = '';
+    }
+    if (saldoSospechoso(c)) {
+      const total = c.cuota_fija * c.total_cuotas;
+      html += `<div class="cuenta-banner aviso">
+      <span>⚠️ Revisar: el «Saldo a financiar» está en <strong>${fmt(c.saldo_inicial)}</strong> pero esta cuenta es de ${c.total_cuotas} cuotas de ${fmt(c.cuota_fija)} (total <strong>${fmt(total)}</strong>). Por eso la columna «Saldo anterior» y el saldo de los recibos pueden mostrar $0.</span>
+      <button class="btn-primary btn-sm" onclick="editarClienteActual()">Corregir ahora</button>
+    </div>`;
+    }
   }
+  banner.innerHTML = html;
+}
+
+// ¿El "saldo a financiar" parece un error de carga? (cuenta en cuotas con saldo = pocas cuotas en vez del total)
+function saldoSospechoso(c) {
+  if (c.modalidad !== 'cuotas' || !(c.cuota_fija > 0) || !(c.total_cuotas > 0)) return false;
+  const total = c.cuota_fija * c.total_cuotas;
+  const k = c.saldo_inicial / c.cuota_fija;
+  return c.saldo_inicial < total && Number.isInteger(k) && k >= 1;
 }
 
 // Abre el cuadro para escribir el motivo del archivado
@@ -394,10 +437,7 @@ function archivarClienteActual() {
   document.getElementById('archivar-motivo').value = c.saldada ? 'Saldada' : '';
   document.getElementById('archivar-error').style.display = 'none';
   abrirModal('modal-archivar');
-  setTimeout(() => {
-    const inp = document.getElementById('archivar-motivo');
-    inp.focus(); inp.select();
-  }, 100);
+  enfocarSiNadie('archivar-motivo', 'modal-archivar');
 }
 
 async function confirmarArchivar() {
@@ -424,6 +464,8 @@ async function reactivarClienteActual() {
   const r = await api(`/api/clientes/${c.id}/reactivar`, { method: 'POST' });
   if (r.error) { toast(r.error, 'err'); return; }
   toast('Cuenta reactivada ✓');
+  // actualizar el contador "Archivadas" del menú (ya no se recarga la lista al abrir una cuenta)
+  api('/api/clientes').then(lista => { _clientes = lista; actualizarContadorArchivadas(); });
   await abrirCuenta(c.id);
 }
 
@@ -454,7 +496,7 @@ async function cargarMovimientos(clienteId, movsCache) {
 
     let estadoCell;
     if (esCuotas && esAbono) {
-      estadoCell = `<td class="estado-cell"><span class="badge-pagado">✓ PAGADO<br><small>Cuota ${contadorCuotas} de ${totalCuotas}</small></span></td>`;
+      estadoCell = `<td class="estado-cell"><span class="badge-pagado">✓ PAGADO<br><small>${totalCuotas > 0 ? `Cuota ${contadorCuotas} de ${totalCuotas}` : `Pago ${contadorCuotas}`}</small></span></td>`;
     } else if (esAbono) {
       estadoCell = `<td class="estado-cell"><span class="badge-pagado">✓ PAGADO</span></td>`;
     } else {
@@ -564,13 +606,13 @@ async function abrirModalRecibo(movId) {
     <div><div class="pi-lbl">N° Recibo</div><div class="pi-val">#${mov.numero_recibo}</div></div>
     <div><div class="pi-lbl">Fecha</div><div class="pi-val">${fmtFecha(mov.fecha)}</div></div>
     <div><div class="pi-lbl">Monto abonado</div><div class="pi-val verde">${fmt(mov.pago)}</div></div>
-    ${esCuotas ? `<div><div class="pi-lbl">Cuota</div><div class="pi-val">${cuotasPagadas} de ${_clienteActual.total_cuotas}</div></div>` : ''}
+    ${esCuotas ? `<div><div class="pi-lbl">${_clienteActual.total_cuotas > 0 ? 'Cuota' : 'Pago'}</div><div class="pi-val">${_clienteActual.total_cuotas > 0 ? cuotasPagadas + ' de ' + _clienteActual.total_cuotas : cuotasPagadas}</div></div>` : ''}
     <div><div class="pi-lbl">Saldo restante</div><div class="pi-val ${mov.saldo_nuevo > 0 ? 'rojo' : 'verde'}">${fmt(mov.saldo_nuevo)}</div></div>
   `;
 
   if (esCuotas) {
     document.getElementById('recibo-concepto').value =
-      `Cuota ${cuotasPagadas} de ${_clienteActual.total_cuotas} — ${_clienteActual.auto_descripcion || ''}`;
+      `${_clienteActual.total_cuotas > 0 ? `Cuota ${cuotasPagadas} de ${_clienteActual.total_cuotas}` : `Pago ${cuotasPagadas}`} — ${_clienteActual.auto_descripcion || ''}`;
     document.getElementById('recibo-concepto-label').textContent = 'Concepto del recibo';
     document.getElementById('recibo-concepto-hint').textContent  = 'Podés editar el texto antes de generar el PDF.';
   } else {
@@ -628,7 +670,7 @@ function abrirNuevoMovimiento() {
   seleccionarEstado('abono');
   actualizarPreviewPago();
   abrirModal('modal-movimiento');
-  setTimeout(() => document.getElementById('m-pago').focus(), 100);
+  enfocarSiNadie('m-pago', 'modal-movimiento');
 }
 
 function aplicarRecargo() {
@@ -770,7 +812,7 @@ function abrirNuevaVenta() {
   document.getElementById('v-notas').value     = '';
   document.getElementById('v-fecha').value     = new Date().toISOString().split('T')[0];
   abrirModal('modal-venta');
-  setTimeout(() => document.getElementById('v-auto').focus(), 100);
+  enfocarSiNadie('v-auto', 'modal-venta');
 }
 
 async function editarVenta(id) {
@@ -822,12 +864,14 @@ function abrirNuevoCliente() {
   document.getElementById('f-id').value = '';
   ['f-nombre','f-telefono','f-dni','f-auto','f-saldo','f-cuota','f-total-cuotas','f-obs']
     .forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f-saldo').dataset.manual = '';       // el saldo se autocompleta hasta que lo escriban a mano
+  document.getElementById('f-modalidad').disabled = false;
   document.getElementById('f-modalidad').value    = 'interes';
   document.getElementById('f-fecha-inicio').value = new Date().toISOString().split('T')[0];
-  document.getElementById('grupo-saldo').style.display = 'block';
+  document.getElementById('grupo-saldo').style.display = '';
   cambiarModalidad();
   abrirModal('modal-cliente');
-  setTimeout(() => document.getElementById('f-nombre').focus(), 100);
+  enfocarSiNadie('f-nombre', 'modal-cliente');
 }
 
 function editarClienteActual() {
@@ -839,13 +883,16 @@ function editarClienteActual() {
   document.getElementById('f-telefono').value    = c.telefono||'';
   document.getElementById('f-dni').value         = c.dni||'';
   document.getElementById('f-auto').value        = c.auto_descripcion||'';
-  document.getElementById('f-saldo').value       = c.saldo_inicial;
+  document.getElementById('f-saldo').value       = Number(c.saldo_inicial || 0).toLocaleString('es-AR').replace(/,/g, '.');
+  document.getElementById('f-saldo').dataset.manual = '1';      // al editar, nunca se pisa solo
   document.getElementById('f-modalidad').value   = c.modalidad;
+  document.getElementById('f-modalidad').disabled = true;       // la modalidad no se puede cambiar al editar
   document.getElementById('f-cuota').value       = c.cuota_fija||'';
   document.getElementById('f-total-cuotas').value= c.total_cuotas||'';
   document.getElementById('f-obs').value         = c.observaciones||'';
   document.getElementById('f-fecha-inicio').value= c.fecha_inicio||'';
-  document.getElementById('grupo-saldo').style.display = 'none';
+  // El saldo a financiar se puede corregir solo en cuentas en cuotas (recalcula los saldos de la tabla)
+  document.getElementById('grupo-saldo').style.display = c.modalidad === 'cuotas' ? '' : 'none';
   cambiarModalidad();
   abrirModal('modal-cliente');
 }
@@ -865,13 +912,49 @@ function calcularTotalCuotas() {
       const total = cuota * cant;
       totalEl.textContent = `Total financiado: ${fmt(total)}`;
       totalEl.style.display = 'block';
-      const saldoEl = document.getElementById('f-saldo');
-      if (saldoEl && (!saldoEl.value || saldoEl.value === '0')) {
-        saldoEl.value = total.toLocaleString('es-AR').replace(/,/g, '.');
-      }
     } else {
       totalEl.style.display = 'none';
     }
+  }
+  // El saldo a financiar acompaña SIEMPRE al total (cuota × cantidad) mientras no lo escriban a mano.
+  // (Antes se completaba solo la primera vez, con el primer dígito de la cantidad: "1" de "12" → 1 cuota, y quedaba así.)
+  const saldoEl = document.getElementById('f-saldo');
+  if (saldoEl && saldoEl.dataset.manual !== '1') {
+    saldoEl.value = (cuota > 0 && cant > 0) ? (cuota * cant).toLocaleString('es-AR').replace(/,/g, '.') : '';
+  }
+  actualizarAvisoSaldo();
+}
+
+function saldoEscritoAMano() {
+  document.getElementById('f-saldo').dataset.manual = '1';
+  actualizarAvisoSaldo();
+}
+
+// Botón "Usar el total": deja el saldo a financiar igual a cuota × cantidad
+function usarTotalCuotas() {
+  const total = getNumVal('f-cuota') * (parseInt(document.getElementById('f-total-cuotas').value) || 0);
+  if (!(total > 0)) return;
+  const el = document.getElementById('f-saldo');
+  el.value = total.toLocaleString('es-AR').replace(/,/g, '.');
+  el.dataset.manual = '1';
+  actualizarAvisoSaldo();
+}
+
+// Avisa si el saldo a financiar no coincide con cuota × cantidad (puede ser a propósito, pero suele ser un error de carga)
+function actualizarAvisoSaldo() {
+  const av = document.getElementById('f-saldo-aviso');
+  if (!av) return;
+  const cuota = getNumVal('f-cuota');
+  const cant  = parseInt(document.getElementById('f-total-cuotas').value) || 0;
+  const saldo = getNumVal('f-saldo');
+  const total = cuota * cant;
+  const esCuotas = document.getElementById('f-modalidad').value === 'cuotas';
+  if (esCuotas && total > 0 && saldo > 0 && saldo !== total) {
+    av.innerHTML = `⚠️ El saldo a financiar (<strong>${fmt(saldo)}</strong>) no coincide con el total de las cuotas (<strong>${fmt(total)}</strong>). Si fue un error de carga, usá el total. Si es un monto financiado distinto a propósito, dejalo así.
+      <button type="button" class="btn-secondary btn-sm" onclick="usarTotalCuotas()">Usar el total: ${fmt(total)}</button>`;
+    av.style.display = 'block';
+  } else {
+    av.style.display = 'none';
   }
 }
 
@@ -886,7 +969,11 @@ async function guardarCliente() {
   if (modalidad === 'cuotas') {
     const cuota = getNumVal('f-cuota');
     const cant  = parseInt(document.getElementById('f-total-cuotas').value) || 0;
-    if (cuota > 0 && cant > 0 && (!saldo || saldo <= 0)) {
+    if (!id && (!(cuota > 0) || !(cant > 0))) {
+      toast('Completá el monto de la cuota y la cantidad de cuotas', 'err'); return;
+    }
+    // Si el saldo no se escribió a mano, siempre es cuota × cantidad (nunca un valor parcial)
+    if (cuota > 0 && cant > 0 && (document.getElementById('f-saldo').dataset.manual !== '1' || !saldo || saldo <= 0)) {
       saldo = cuota * cant;
     }
   }
@@ -906,8 +993,11 @@ async function guardarCliente() {
   };
   try {
     if (id) {
-      await api(`/api/clientes/${id}`, { method:'PUT', body:JSON.stringify(body) });
-      toast('Cliente actualizado ✓');
+      const r = await api(`/api/clientes/${id}`, { method:'PUT', body:JSON.stringify(body) });
+      if (r.error) { toast(r.error, 'err'); return; }
+      toast(r.saldo_corregido
+        ? `Saldo corregido ✓ (${r.movimientos_recalculados} movimiento${r.movimientos_recalculados === 1 ? '' : 's'} recalculado${r.movimientos_recalculados === 1 ? '' : 's'})`
+        : 'Cliente actualizado ✓');
     } else {
       const r = await api('/api/clientes', { method:'POST', body:JSON.stringify(body) });
       if (r.error) { toast(r.error,'err'); return; }
@@ -964,7 +1054,7 @@ function abrirCambioClave(obligatorio) {
   document.getElementById('clave-cerrar').style.display   = obligatorio ? 'none' : '';
   document.getElementById('clave-cancelar').style.display = obligatorio ? 'none' : '';
   abrirModal('modal-clave');
-  setTimeout(() => document.getElementById('clave-actual').focus(), 100);
+  enfocarSiNadie('clave-actual', 'modal-clave');
 }
 
 async function guardarCambioClave() {

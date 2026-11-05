@@ -519,3 +519,11 @@ a { text-decoration: none; color: inherit; }
   .cliente-nombre .badge-saldada, .cliente-nombre .badge-archivada { margin-left: 0; margin-right: .4rem; margin-top: .2rem; }
   .cliente-motivo { order: 5; flex-basis: 100%; max-width: none; margin: .5rem 0 0; }
 }
+
+/* Avisos de revisión de datos */
+.cuenta-banner.aviso { background: #fff7ed; border: 1.5px solid #fdba74; color: #7c2d12; }
+#f-saldo-aviso {
+  margin-top: .5rem; padding: .6rem .8rem; border-radius: 8px; font-size: .82rem; line-height: 1.35;
+  background: #fff7ed; border: 1.5px solid #fdba74; color: #7c2d12;
+}
+#f-saldo-aviso button { margin-top: .4rem; display: block; }

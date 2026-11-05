@@ -9,12 +9,34 @@ function hoyLocal() {
 }
 
 // ¿La cuenta está saldada?
+//  - cuotas : SOLO cuando se pagaron todas las cuotas. En estas cuentas el "saldo" arrastrado
+//             depende del "Saldo a financiar" cargado al crear el cliente y puede quedar en $0
+//             mucho antes de terminar (ej: si se cargó el valor de una cuota), así que no sirve para decidir.
 //  - interés: saldo en 0 (y con al menos un movimiento cargado)
-//  - cuotas : todas las cuotas pagadas, o saldo en 0
 function esSaldada(c, saldo, cuotasPagadas, cantMovs) {
   if (cantMovs === 0) return false;
-  if (c.modalidad === 'cuotas' && c.total_cuotas > 0 && cuotasPagadas >= c.total_cuotas) return true;
+  if (c.modalidad === 'cuotas' && c.total_cuotas > 0) return cuotasPagadas >= c.total_cuotas;
   return saldo <= 0;
+}
+
+// Recalcula la cadena de saldos de una cuenta en cuotas a partir de su saldo inicial:
+// cada movimiento arrastra el saldo del anterior (en orden de carga). Conserva el interés y el pago de cada uno.
+function recalcularCuotas(clienteId) {
+  const c = db.get('SELECT saldo_inicial FROM clientes WHERE id=?', [clienteId]);
+  let saldo = c.saldo_inicial;
+  const movs = db.query(
+    'SELECT id, pago, interes, saldo_anterior, saldo_nuevo FROM movimientos WHERE cliente_id=? ORDER BY id ASC',
+    [clienteId]);
+  let cambios = 0;
+  for (const m of movs) {
+    const nuevo = Math.max(0, saldo + (m.interes || 0) - (m.pago || 0));
+    if (m.saldo_anterior !== saldo || m.saldo_nuevo !== nuevo) {
+      db.run('UPDATE movimientos SET saldo_anterior=?, saldo_nuevo=? WHERE id=?', [saldo, nuevo, m.id]);
+      cambios++;
+    }
+    saldo = nuevo;
+  }
+  return cambios;
 }
 
 // ── Listar todos — UN SOLO JOIN en lugar de 3 queries por cliente ──
@@ -61,9 +83,16 @@ router.get('/:id', (req, res) => {
 
 // ── Crear ─────────────────────────────────────────────────────────
 router.post('/', (req, res) => {
-  const { nombre, telefono, dni, auto_descripcion, saldo_inicial, modalidad,
-          cuota_fija, total_cuotas, observaciones, fecha_inicio } = req.body;
+  let { nombre, telefono, dni, auto_descripcion, saldo_inicial, modalidad,
+        cuota_fija, total_cuotas, observaciones, fecha_inicio } = req.body;
   if (!nombre) return res.status(400).json({ error: 'El nombre es requerido' });
+
+  if (modalidad === 'cuotas') {
+    if (!(cuota_fija > 0) || !(total_cuotas > 0))
+      return res.status(400).json({ error: 'Completá el monto de la cuota y la cantidad de cuotas' });
+    // Si no viene un saldo a financiar, se toma el total de las cuotas (cuota × cantidad)
+    if (!saldo_inicial || saldo_inicial <= 0) saldo_inicial = cuota_fija * total_cuotas;
+  }
   if (!saldo_inicial || saldo_inicial <= 0)
     return res.status(400).json({ error: 'El saldo inicial es requerido' });
 
@@ -82,18 +111,35 @@ router.post('/', (req, res) => {
 // El estado (activo/archivado) NO se cambia desde acá: se usan /archivar y /reactivar.
 // Antes, editar sin mandar "estado" dejaba la cuenta como 'activo' sin querer.
 router.put('/:id', (req, res) => {
-  const actual = db.get('SELECT id FROM clientes WHERE id=?', [req.params.id]);
+  const actual = db.get('SELECT id, modalidad, estado, saldo_inicial FROM clientes WHERE id=?', [req.params.id]);
   if (!actual) return res.status(404).json({ error: 'No encontrado' });
-  const { nombre, telefono, dni, auto_descripcion, cuota_fija, total_cuotas, observaciones } = req.body;
+  const { nombre, telefono, dni, auto_descripcion, cuota_fija, total_cuotas, observaciones, saldo_inicial } = req.body;
   if (!nombre || !String(nombre).trim())
     return res.status(400).json({ error: 'El nombre es requerido' });
+
+  // Corregir el "saldo a financiar": solo cuentas en cuotas (en las de interés cambiaría el historial de intereses)
+  const nuevoSaldo = parseFloat(saldo_inicial);
+  const cambiaSaldo = actual.modalidad === 'cuotas' && nuevoSaldo > 0 && nuevoSaldo !== actual.saldo_inicial;
+  if (cambiaSaldo && actual.estado === 'archivado')
+    return res.status(409).json({ error: 'La cuenta está archivada. Reactivala para corregir el saldo a financiar.' });
+  if (cambiaSaldo) {
+    // Copia de seguridad de la base ANTES de recalcular; si no se puede hacer, no se toca nada
+    const copia = db.hacerBackupManual(`autogest-antes-de-corregir-saldo-cliente${actual.id}-${Date.now()}.db`);
+    if (!copia) return res.status(500).json({ error: 'No se pudo hacer la copia de seguridad; no se modificó nada.' });
+  }
+
   db.run(
     `UPDATE clientes SET nombre=?, telefono=?, dni=?, auto_descripcion=?,
      cuota_fija=?, total_cuotas=?, observaciones=? WHERE id=?`,
     [nombre, telefono||'', dni||'', auto_descripcion||'',
      cuota_fija||0, total_cuotas||0, observaciones||'', req.params.id]
   );
-  res.json({ ok: true });
+  let recalculados = 0;
+  if (cambiaSaldo) {
+    db.run('UPDATE clientes SET saldo_inicial=? WHERE id=?', [nuevoSaldo, actual.id]);
+    recalculados = recalcularCuotas(actual.id);
+  }
+  res.json({ ok: true, saldo_corregido: cambiaSaldo, movimientos_recalculados: recalculados });
 });
 
 // ── Archivar (lo decide el usuario, nunca automático) ─────────────
