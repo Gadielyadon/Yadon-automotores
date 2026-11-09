@@ -22,24 +22,33 @@ const $ = n => '$' + Math.round(n).toLocaleString('es-AR');
       FROM clientes c WHERE c.modalidad = 'cuotas' ORDER BY c.nombre`);
   const filas = res.length ? res[0].values : [];
 
-  const sospechosas = [], sinPlan = [], distintas = [];
+  const sospechosas = [], archivadasSosp = [], sinPlan = [], distintas = [];
   console.log(`\nCuentas en cuotas: ${filas.length}\n`);
   for (const [id, nombre, estado, cuota, total, saldo, pagadas] of filas) {
     const totalCuotas = cuota * total;
     let diag = 'OK';
+    const archivada = estado === 'archivado';
+    const q = total > 0 ? saldo / total : 0;
     if (!(cuota > 0) || !(total > 0)) {
       diag = '⚠ SIN CUOTAS CARGADAS (0 cuotas de $0)'; sinPlan.push(nombre);
     } else if (saldo < totalCuotas && Number.isInteger(saldo / cuota)) {
-      diag = `⚠ SOSPECHOSA: el saldo a financiar son solo ${saldo / cuota} cuota(s)`; sospechosas.push(nombre);
+      // se escribió la cuota y después la cantidad: quedó con el primer dígito de la cantidad
+      diag = `⚠ SOSPECHOSA: el saldo a financiar son solo ${saldo / cuota} cuota(s)`;
+      (archivada ? archivadasSosp : sospechosas).push(nombre);
+    } else if (saldo < totalCuotas && Number.isInteger(q) && q >= 1 && String(cuota).startsWith(String(q))) {
+      // se escribió la cantidad y después la cuota: quedó con el primer dígito de la cuota
+      diag = `⚠ SOSPECHOSA: el saldo a financiar (${$(saldo)}) quedó con un valor parcial`;
+      (archivada ? archivadasSosp : sospechosas).push(nombre);
     } else if (saldo !== totalCuotas) {
       diag = 'saldo distinto al total (puede ser a propósito, ej. capital sin interés)'; distintas.push(nombre);
     }
     console.log(`#${id} ${nombre}${estado === 'archivado' ? ' [archivada]' : ''}`);
     console.log(`     ${total} cuotas de ${$(cuota)} = ${$(totalCuotas)} | saldo a financiar cargado: ${$(saldo)} | pagadas: ${pagadas}`);
-    console.log(`     → ${diag}\n`);
+    console.log(`     → ${diag}${archivada && diag.startsWith('⚠') ? '  (archivada: se puede dejar así)' : ''}\n`);
   }
   console.log('──────── RESUMEN ────────');
-  console.log(`  Sospechosas (hay que corregir): ${sospechosas.length}${sospechosas.length ? '  → ' + sospechosas.join(', ') : ''}`);
+  console.log(`  Sospechosas ACTIVAS (corregir):  ${sospechosas.length}${sospechosas.length ? '  → ' + sospechosas.join(', ') : ''}`);
+  console.log(`  Sospechosas archivadas:          ${archivadasSosp.length}${archivadasSosp.length ? '  → ' + archivadasSosp.join(', ') + '  (no hace falta tocarlas)' : ''}`);
   console.log(`  Sin cuotas cargadas:            ${sinPlan.length}${sinPlan.length ? '  → ' + sinPlan.join(', ') : ''}`);
   console.log(`  Saldo distinto al total:        ${distintas.length}${distintas.length ? '  → ' + distintas.join(', ') : ''}`);
   console.log('\nPara corregir una sospechosa: abrí la cuenta → botón "Corregir ahora" (o Editar) → "Usar el total" → Guardar.\n');

@@ -2,22 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const db      = require('../db');
 
-// Fecha de hoy en hora local (YYYY-MM-DD)
-function hoyLocal() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-}
-
-// ¿La cuenta está saldada?
-//  - cuotas : SOLO cuando se pagaron todas las cuotas. En estas cuentas el "saldo" arrastrado
-//             depende del "Saldo a financiar" cargado al crear el cliente y puede quedar en $0
-//             mucho antes de terminar (ej: si se cargó el valor de una cuota), así que no sirve para decidir.
-//  - interés: saldo en 0 (y con al menos un movimiento cargado)
-function esSaldada(c, saldo, cuotasPagadas, cantMovs) {
-  if (cantMovs === 0) return false;
-  if (c.modalidad === 'cuotas' && c.total_cuotas > 0) return cuotasPagadas >= c.total_cuotas;
-  return saldo <= 0;
-}
+const { hoyLocal, esSaldada } = require('../calculos');
 
 // Recalcula la cadena de saldos de una cuenta en cuotas a partir de su saldo inicial:
 // cada movimiento arrastra el saldo del anterior (en orden de carga). Conserva el interés y el pago de cada uno.

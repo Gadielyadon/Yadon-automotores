@@ -40,7 +40,7 @@ router.post('/', (req, res) => {
 
   const r = db.run(
     'INSERT INTO ventas (fecha, auto_desc, precio, comprador, notas) VALUES (?,?,?,?,?)',
-    [fecha || new Date().toISOString().split('T')[0], auto_desc, precio, comprador||'', notas||'']
+    [fecha || require('../calculos').hoyLocal(), auto_desc, precio, comprador||'', notas||'']
   );
   db.save();
   res.json({ id: r.lastInsertRowid });

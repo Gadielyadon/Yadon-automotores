@@ -23,6 +23,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api', auth.requireAuth);
 
 app.use('/api/clientes',    require('./routes/clientes'));
+app.use('/api/dashboard',   require('./routes/dashboard'));
 app.use('/api/movimientos', require('./routes/movimientos'));
 app.use('/api/recibo',      require('./routes/recibo'));
 app.use('/api/ventas',      require('./routes/ventas'));
