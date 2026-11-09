@@ -95,16 +95,70 @@
 
   <!-- DASHBOARD -->
   <div class="page active" id="page-dashboard">
-    <div class="page-header"><h1>Panel general</h1></div>
-    <div class="section-title">Ventas del mes</div>
-    <div id="dash-ventas-mes" style="margin-bottom:1.75rem"></div>
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
-      <div class="section-title" style="margin-bottom:0">Cuentas activas</div>
-      <div style="display:flex;gap:.5rem;flex-wrap:wrap">
-        <button class="btn-secondary btn-sm" onclick="navegarA('archivadas')" title="Ver cuentas archivadas">🗄️ Archivadas <span id="dash-n-archivadas"></span></button>
-        <button class="btn-secondary btn-sm" onclick="exportarXLSTodo()" title="Exportar todas las cuentas a Excel (incluye archivadas)">📊 Exportar todo XLS</button>
+    <div class="dash-top">
+      <div>
+        <h1 class="dash-titulo">Panel general</h1>
+        <div class="dash-fecha" id="dash-fecha"></div>
+      </div>
+      <button class="btn-secondary btn-sm" onclick="exportarXLSTodo()" title="Exportar todas las cuentas a Excel (incluye archivadas)">📊 Exportar todo XLS</button>
+    </div>
+
+    <div class="dash-grid">
+      <section class="hero g-hero" onclick="navegarA('cuentas')" title="Ver las cuentas">
+        <span class="hero-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Total financiado · saldo a cobrar</span>
+        <div class="hero-num" id="k-pendiente">—</div>
+        <div class="hero-sub" id="k-cartera-sub"></div>
+        <div class="hero-bar"><div class="hero-bar-fill" id="k-bar"></div></div>
+        <div class="hero-bar-lbl" id="k-bar-lbl"></div>
+        <div class="hero-stats">
+          <div><span>Total financiado</span><strong id="k-financiado">—</strong><small>todas las cuentas activas</small></div>
+          <div><span>Ya cobrado</span><strong id="k-cobrado">—</strong><small>descontado del total</small></div>
+          <div><span id="k-mes-label">Cobrado este mes</span><strong id="k-mes">—</strong><small id="k-mes-sub"></small></div>
+        </div>
+      </section>
+
+      <section class="mora-card g-mora" id="k-mora-card" onclick="irA('dash-mora')" title="Ver las cuentas en mora">
+        <div class="mora-top"><span class="mora-icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span><span class="mora-lbl">En mora</span></div>
+        <div class="mora-num" id="k-mora">—</div>
+        <div class="mora-sub" id="k-mora-sub"></div>
+        <div class="kpi-chips" id="k-mora-chips"></div>
+        <div class="mora-top3" id="k-mora-top"></div>
+        <div class="mora-link">Ver todas las cuentas en mora →</div>
+      </section>
+
+      <div class="tile kpi-activos g-tile" onclick="navegarA('cuentas')" title="Ver las cuentas activas">
+        <div class="tile-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+        <div><div class="tile-lbl">Clientes activos</div><div class="tile-num" id="k-activos">—</div><div class="tile-sub" id="k-activos-sub"></div></div>
+      </div>
+      <div class="tile kpi-saldadas g-tile" onclick="irA('dash-saldadas')" title="Ver las cuentas saldadas">
+        <div class="tile-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+        <div><div class="tile-lbl">Saldadas</div><div class="tile-num" id="k-saldadas">—</div><div class="tile-sub">listas para archivar</div></div>
+      </div>
+      <div class="tile kpi-archivadas g-tile" onclick="navegarA('archivadas')" title="Ver las cuentas archivadas">
+        <div class="tile-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg></div>
+        <div><div class="tile-lbl">Archivadas</div><div class="tile-num" id="k-archivadas">—</div><div class="tile-sub">cuentas cerradas, guardadas</div></div>
+      </div>
+
+      <div class="panel-card g-chart">
+        <div class="panel-titulo">Cobrado por mes <span class="panel-nota">pagos registrados, últimos 6 meses</span></div>
+        <div id="dash-chart"></div>
+      </div>
+      <div class="panel-card g-mod">
+        <div class="panel-titulo">Saldo a cobrar por modalidad</div>
+        <div id="dash-modalidad"></div>
+      </div>
+
+      <div class="panel-card g-lmora" id="dash-mora">
+        <div class="panel-titulo">Cuentas en mora <span class="panel-nota" id="dash-mora-nota"></span></div>
+        <div id="dash-mora-lista"></div>
+      </div>
+      <div class="panel-card g-lsald" id="dash-saldadas">
+        <div class="panel-titulo">Saldadas, listas para archivar <span class="panel-nota">abrí la cuenta y tocá «Archivar cuenta»</span></div>
+        <div id="dash-saldadas-lista"></div>
       </div>
     </div>
+
+    <div class="dash-seccion">Todas las cuentas activas</div>
     <div class="clientes-list" id="dashboard-clientes"></div>
   </div>
 
@@ -598,12 +652,6 @@
           <input type="text" id="f-auto" placeholder="Toyota Corolla 2020 — AB123CD">
         </div>
         <div class="form-separator"></div>
-        <div class="form-group full" id="grupo-saldo">
-          <label>Saldo a financiar ($) *</label>
-          <input type="text" id="f-saldo" placeholder="7.500.000" inputmode="numeric" oninput="fmtInput(this); saldoEscritoAMano()">
-          <span class="form-hint">Monto pendiente después de la seña. En cuotas fijas se completa solo con cuota × cantidad.</span>
-          <div id="f-saldo-aviso" style="display:none"></div>
-        </div>
         <div class="form-group full">
           <label>Modalidad de pago</label>
           <select id="f-modalidad" onchange="cambiarModalidad()">
@@ -612,9 +660,13 @@
           </select>
         </div>
         <div id="grupo-cuotas" style="display:none;grid-column:1/-1">
+          <div class="aviso-cuotas">
+            <strong>💡 Cargá el valor de UNA sola cuota</strong> (no el total) y cuántas cuotas son. El total a financiar se calcula solo.
+            <div class="aviso-cuotas-ej">Ejemplo: 12 cuotas de $287.000 → escribí <strong>287.000</strong> en el valor y <strong>12</strong> en la cantidad.</div>
+          </div>
           <div class="form-grid">
             <div class="form-group">
-              <label>Monto de la cuota ($)</label>
+              <label>Valor de UNA cuota ($)</label>
               <input type="text" id="f-cuota" placeholder="380.000" inputmode="numeric" oninput="fmtInput(this); calcularTotalCuotas()">
             </div>
             <div class="form-group">
@@ -623,6 +675,12 @@
             </div>
           </div>
           <div id="f-total-calculado" style="display:none;margin-top:.6rem;padding:.65rem 1rem;background:#eff6ff;border:1px solid var(--blue);border-radius:8px;font-size:.88rem;font-weight:600;color:var(--blue)"></div>
+        </div>
+        <div class="form-group full" id="grupo-saldo">
+          <label id="lbl-saldo">Saldo a financiar ($) *</label>
+          <input type="text" id="f-saldo" placeholder="7.500.000" inputmode="numeric" oninput="fmtInput(this); saldoEscritoAMano()">
+          <span class="form-hint" id="hint-saldo">Capital que se financia (el monto pendiente después de la seña). Se le suma el 6% de interés por mes.</span>
+          <div id="f-saldo-aviso" style="display:none"></div>
         </div>
         <div class="form-group full">
           <label>Fecha de inicio</label>

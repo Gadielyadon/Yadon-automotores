@@ -99,6 +99,11 @@ function enfocarSiNadie(id, modalId) {
     }
   }, 100);
 }
+// Fecha de hoy en hora LOCAL (YYYY-MM-DD). toISOString() usa hora de Londres: pasadas las 21:00 en Argentina daba "mañana".
+function hoyLocalISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 function inicialNombre(n) {
   return (n||'?').split(' ').map(p=>p[0]).slice(0,2).join('').toUpperCase();
 }
@@ -156,37 +161,205 @@ function setBtnGuardando(btnId, guardando, textoOriginal) {
 }
 
 // ═══ DASHBOARD ═══════════════════════════════════════════════════
+const MESES_CORTO = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+
+// Monto abreviado para el gráfico: $5,9 M · $850 mil
+function fmtCorto(n) {
+  if (n >= 1e6) return '$' + (n / 1e6).toFixed(1).replace('.', ',') + ' M';
+  if (n >= 1e3) return '$' + Math.round(n / 1e3) + ' mil';
+  return '$' + Math.round(n);
+}
+
+// Lleva a una sección del panel
+function irA(id) {
+  const el = document.getElementById(id);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 async function cargarDashboard() {
-  const clientes = await api('/api/clientes');
+  // Todos los números salen del servidor (mismas reglas que las cuentas) y se piden juntos
+  const [d, clientes] = await Promise.all([api('/api/dashboard'), api('/api/clientes')]);
   _clientes = clientes;
-  const activos = clientes.filter(c => c.estado !== 'archivado');
   actualizarContadorArchivadas();
 
-  const hoy = new Date();
-  const mesActual = `${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,'0')}`;
+  pintarKPIs(d);
+  pintarGrafico(d.cobranzas.meses);
+  pintarModalidad(d.cartera, d.clientes, d.mora.cantidad);
+  pintarMora(d.mora, d.dias_mora);
+  pintarSaldadas(d.saldadas);
 
-  const ventasDelMes = await api(`/api/ventas?mes=${mesActual}`);
-  const dvCont = document.getElementById('dash-ventas-mes');
-  if (!ventasDelMes.length) {
-    dvCont.innerHTML = `<div class="empty-state" style="padding:1.5rem"><p>Sin ventas registradas este mes.</p></div>`;
-  } else {
-    dvCont.innerHTML = `<div class="table-wrap"><table class="mov-table">
-      <thead><tr><th>Fecha</th><th>Vehículo</th><th>Comprador</th><th>Precio</th></tr></thead>
-      <tbody>${ventasDelMes.map(v => `<tr>
-        <td>${fmtFecha(v.fecha)}</td>
-        <td><strong>${esc(v.auto_desc)}</strong></td>
-        <td>${esc(v.comprador || '—')}</td>
-        <td><strong style="color:var(--green)">${fmt(v.precio)}</strong></td>
-      </tr>`).join('')}</tbody>
-    </table></div>`;
-  }
-
+  const activos = clientes.filter(c => c.estado !== 'archivado');
   const cont = document.getElementById('dashboard-clientes');
   cont.innerHTML = activos.length === 0
     ? emptyState('Sin clientes activos.')
     : activos.map(clienteCardHTML).join('');
   cont.querySelectorAll('.cliente-card').forEach(el =>
     el.addEventListener('click', () => abrirCuenta(parseInt(el.dataset.id))));
+}
+
+function pintarKPIs(d) {
+  const set = (id, v) => { document.getElementById(id).textContent = v; };
+  const plural = (n, uno, varios) => n === 1 ? uno : varios;
+
+  const [y, m, dd] = d.hoy.split('-').map(Number);
+  const fechaTxt = new Date(y, m - 1, dd).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  set('dash-fecha', fechaTxt.charAt(0).toUpperCase() + fechaTxt.slice(1));   // "Sábado, 7 de noviembre de 2026"
+
+  set('k-activos', d.clientes.activos);
+  set('k-activos-sub', `${d.clientes.en_cuotas} en cuotas · ${d.clientes.con_interes} con interés`);
+
+  // Total financiado: baja con cada pago (es el saldo pendiente de cobro de todas las cuentas activas)
+  const pct = d.cartera.cobrado_pct;
+  set('k-pendiente', fmt(d.cartera.pendiente));
+  set('k-cartera-sub', `falta cobrar, de ${fmt(d.cartera.financiado)} financiados`);
+  document.getElementById('k-bar').style.width = pct.toFixed(1) + '%';
+  set('k-bar-lbl', `${pct.toFixed(1).replace('.', ',')}% ya cobrado`);
+  set('k-financiado', fmt(d.cartera.financiado));
+  set('k-cobrado', fmt(Math.max(0, d.cartera.financiado - d.cartera.pendiente)));
+
+  // Mora
+  const mo = d.mora;
+  set('k-mora', mo.cantidad);
+  document.getElementById('k-mora-card').classList.toggle('ok', mo.cantidad === 0);
+  set('k-mora-sub', mo.cantidad > 0
+    ? `${fmt(mo.monto)} pendiente en ${plural(mo.cantidad, 'esta cuenta', 'estas cuentas')}`
+    : `Ninguna cuenta con más de ${d.dias_mora} días sin pagar ✓`);
+  // Las 3 cuentas más atrasadas, para ir directo (el clic no dispara el desplazamiento de la tarjeta)
+  const top = document.getElementById('k-mora-top');
+  top.innerHTML = mo.cuentas.length
+    ? '<div class="mora-top3-t">Más atrasadas</div>' + mo.cuentas.slice(0, 3).map(m =>
+        `<div class="mora-fila" data-id="${m.id}"><span class="n">${esc(m.nombre)}</span><span class="d">${m.dias} días</span></div>`).join('')
+    : '';
+  top.querySelectorAll('.mora-fila').forEach(el => el.addEventListener('click', e => {
+    e.stopPropagation(); abrirCuenta(parseInt(el.dataset.id));
+  }));
+  document.getElementById('k-mora-chips').innerHTML =
+    (mo.tramos.leve  ? `<span class="kpi-chip leve">31–60 días: ${mo.tramos.leve}</span>`   : '') +
+    (mo.tramos.media ? `<span class="kpi-chip media">61–90 días: ${mo.tramos.media}</span>` : '') +
+    (mo.tramos.grave ? `<span class="kpi-chip grave">+90 días: ${mo.tramos.grave}</span>`   : '');
+
+  // Cobrado este mes
+  const ma = d.cobranzas.mes_actual;
+  const nombreMes = new Date(y, m - 1, 1).toLocaleDateString('es-AR', { month: 'long' });
+  set('k-mes-label', `Cobrado en ${nombreMes}`);
+  set('k-mes', fmt(ma.monto));
+  set('k-mes-sub', `${ma.cantidad} ${plural(ma.cantidad, 'pago registrado', 'pagos registrados')} este mes`);
+
+  set('k-saldadas', d.clientes.saldadas);
+  set('k-archivadas', d.clientes.archivadas);
+}
+
+// Gráfico de barras (SVG) de lo cobrado en cada uno de los últimos 6 meses
+function pintarGrafico(meses) {
+  const cont = document.getElementById('dash-chart');
+  const max = Math.max(...meses.map(x => x.monto));
+  if (!(max > 0)) { cont.innerHTML = '<div class="dash-vacio">Todavía no hay pagos registrados en estos meses.</div>'; return; }
+  const W = 640, base = 215, alto = 170, n = meses.length, paso = W / n, ancho = paso * 0.5;
+  const guias = [0.25, 0.5, 0.75, 1].map(f => `<line class="chart-grid" x1="0" y1="${(base - alto * f).toFixed(1)}" x2="${W}" y2="${(base - alto * f).toFixed(1)}"/>`).join('');
+  const barras = meses.map((x, i) => {
+    const h = Math.max(x.monto > 0 ? 3 : 0, (x.monto / max) * alto);
+    const cx = paso * i + paso / 2;
+    const [yy, mm] = x.mes.split('-').map(Number);
+    const etiqueta = `${MESES_CORTO[mm - 1]} ${String(yy).slice(2)}`;
+    const completo = new Date(yy, mm - 1, 1).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+    return `<g>
+      <title>${completo}: ${fmt(x.monto)} · ${x.cantidad} ${x.cantidad === 1 ? 'pago' : 'pagos'}</title>
+      <rect class="chart-bar${i === n - 1 ? ' actual' : ''}" x="${(cx - ancho / 2).toFixed(1)}" y="${(base - h).toFixed(1)}" width="${ancho.toFixed(1)}" height="${h.toFixed(1)}" rx="9"/>
+      <text class="chart-val" x="${cx.toFixed(1)}" y="${(base - h - 8).toFixed(1)}" text-anchor="middle">${x.monto > 0 ? fmtCorto(x.monto) : '$0'}</text>
+      <text class="chart-lbl" x="${cx.toFixed(1)}" y="${base + 24}" text-anchor="middle">${etiqueta}</text>
+    </g>`;
+  }).join('');
+  cont.innerHTML = `<svg viewBox="0 0 ${W} 245" width="100%" role="img" aria-label="Cobrado por mes">
+    <defs>
+      <linearGradient id="gradBar" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b5bb5"/><stop offset="1" stop-color="#1a2744"/></linearGradient>
+      <linearGradient id="gradActual" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ef4444"/><stop offset="1" stop-color="#b91c1c"/></linearGradient>
+    </defs>
+    ${guias}<line class="chart-base" x1="0" y1="${base}" x2="${W}" y2="${base}"/>${barras}</svg>`;
+}
+
+// Cuánto falta cobrar en cuotas fijas y con interés, y cómo están las cuentas activas (al día / en mora / saldadas)
+function pintarModalidad(c, cl, nMora) {
+  const cont = document.getElementById('dash-modalidad');
+  const total = c.cuotas.pendiente + c.interes.pendiente;
+  const fila = (clase, nombre, valor, detalle) => `<div class="leg-row">
+      <div class="leg-nom"><span class="leg-dot ${clase}"></span>${nombre}</div>
+      <div class="leg-det"><strong>${valor}</strong><span>${detalle}</span></div>
+    </div>`;
+
+  let html = '';
+  if (!(total > 0)) {
+    html += '<div class="dash-vacio">No hay saldo pendiente de cobro.</div>';
+  } else {
+    const pc = Math.round((c.cuotas.pendiente / total) * 100);
+    html += `<div class="stack">
+        <div class="stack-seg seg-cuotas" style="width:${(c.cuotas.pendiente / total * 100).toFixed(1)}%"></div>
+        <div class="stack-seg seg-interes" style="width:${(c.interes.pendiente / total * 100).toFixed(1)}%"></div>
+      </div>
+      ${fila('seg-cuotas', 'En cuotas fijas', fmt(c.cuotas.pendiente), `${c.cuotas.cantidad} ${c.cuotas.cantidad === 1 ? 'cuenta' : 'cuentas'} · ${pc}%`)}
+      ${fila('seg-interes', 'Con interés mensual', fmt(c.interes.pendiente), `${c.interes.cantidad} ${c.interes.cantidad === 1 ? 'cuenta' : 'cuentas'} · ${100 - pc}%`)}`;
+  }
+
+  // Estado de las cuentas activas
+  const act = cl.activos, sald = cl.saldadas, mora = nMora;
+  const aldia = Math.max(0, act - mora - sald);
+  if (act > 0) {
+    const w = n => (n / act * 100).toFixed(1) + '%';
+    const det = n => `${Math.round(n / act * 100)}%`;
+    html += `<div class="sub-titulo">Estado de las cuentas activas</div>
+      <div class="stack">
+        <div class="stack-seg seg-aldia" style="width:${w(aldia)}"></div>
+        <div class="stack-seg seg-mora" style="width:${w(mora)}"></div>
+        <div class="stack-seg seg-sald" style="width:${w(sald)}"></div>
+      </div>
+      ${fila('seg-aldia', 'Al día', aldia, det(aldia))}
+      ${fila('seg-mora', 'En mora', mora, det(mora))}
+      ${fila('seg-sald', 'Saldadas', sald, det(sald))}`;
+  }
+  cont.innerHTML = html;
+}
+
+function pintarMora(mo, dias) {
+  const cont = document.getElementById('dash-mora-lista');
+  document.getElementById('dash-mora-nota').textContent =
+    `cuentas con saldo pendiente y más de ${dias} días sin registrar un pago`;
+  if (!mo.cuentas.length) {
+    cont.innerHTML = `<div class="dash-vacio">🎉 No hay cuentas en mora: todas tienen un pago de los últimos ${dias} días.</div>`;
+    return;
+  }
+  const filas = mo.cuentas.map(m => {
+    const clase = m.dias > 90 ? 'grave' : m.dias > 60 ? 'media' : 'leve';
+    const ultimo = m.ultimo_pago ? fmtFecha(m.ultimo_pago)
+      : `<span style="opacity:.8">Sin pagos (desde ${fmtFecha(m.desde)})</span>`;
+    return `<tr class="fila-click" data-id="${m.id}">
+      <td><strong>${esc(m.nombre)}</strong><div style="font-size:.76rem;color:var(--text-2)">${esc(m.auto || 'Sin vehículo cargado')}</div></td>
+      <td>${ultimo}</td>
+      <td><span class="dias-badge ${clase}">${m.dias} días</span></td>
+      <td><strong>${fmt(m.pendiente)}</strong></td>
+    </tr>`;
+  }).join('');
+  cont.innerHTML = `<div class="table-wrap mora-scroll"><table class="mov-table">
+    <thead><tr><th>Cliente</th><th>Último pago</th><th>Sin pagar</th><th>Saldo pendiente</th></tr></thead>
+    <tbody>${filas}</tbody></table></div>`;
+  cont.querySelectorAll('tr[data-id]').forEach(tr =>
+    tr.addEventListener('click', () => abrirCuenta(parseInt(tr.dataset.id))));
+}
+
+function pintarSaldadas(lista) {
+  const cont = document.getElementById('dash-saldadas-lista');
+  if (!lista.length) {
+    cont.innerHTML = '<div class="dash-vacio">No hay cuentas saldadas pendientes de archivar.</div>';
+    return;
+  }
+  const filas = lista.map(c => `<tr class="fila-click" data-id="${c.id}">
+      <td><strong>${esc(c.nombre)}</strong><div style="font-size:.76rem;color:var(--text-2)">${esc(c.auto || 'Sin vehículo cargado')}</div></td>
+      <td>${c.ultimo_pago ? fmtFecha(c.ultimo_pago) : '—'}</td>
+      <td><span class="badge badge-green">✓ Saldada</span></td>
+    </tr>`).join('');
+  cont.innerHTML = `<div class="table-wrap mora-scroll"><table class="mov-table">
+    <thead><tr><th>Cliente</th><th>Último pago</th><th>Estado</th></tr></thead>
+    <tbody>${filas}</tbody></table></div>`;
+  cont.querySelectorAll('tr[data-id]').forEach(tr =>
+    tr.addEventListener('click', () => abrirCuenta(parseInt(tr.dataset.id))));
 }
 
 // ═══ LISTA CLIENTES ═══════════════════════════════════════════════
@@ -416,8 +589,12 @@ function actualizarEstadoCuenta(c) {
 function saldoSospechoso(c) {
   if (c.modalidad !== 'cuotas' || !(c.cuota_fija > 0) || !(c.total_cuotas > 0)) return false;
   const total = c.cuota_fija * c.total_cuotas;
-  const k = c.saldo_inicial / c.cuota_fija;
-  return c.saldo_inicial < total && Number.isInteger(k) && k >= 1;
+  if (!(c.saldo_inicial < total)) return false;
+  // a) saldo = k cuotas: se escribió la cuota y después la cantidad, y quedó con el primer dígito ("1" de "12")
+  if (Number.isInteger(c.saldo_inicial / c.cuota_fija)) return true;
+  // b) saldo = cantidad × primeros dígitos de la cuota: se escribió la cantidad y después la cuota ("1" de "1425600" → $24)
+  const q = c.saldo_inicial / c.total_cuotas;
+  return Number.isInteger(q) && q >= 1 && String(c.cuota_fija).startsWith(String(q));
 }
 
 // Abre el cuadro para escribir el motivo del archivado
@@ -638,7 +815,7 @@ function abrirNuevoMovimiento() {
   const c = _clienteActual;
   const esCuotas = c.modalidad === 'cuotas';
 
-  document.getElementById('m-fecha').value = new Date().toISOString().split('T')[0];
+  document.getElementById('m-fecha').value = hoyLocalISO();
   document.getElementById('m-notas').value = '';
   document.getElementById('m-recargo').value = '';
 
@@ -810,7 +987,7 @@ function abrirNuevaVenta() {
   document.getElementById('v-precio').value    = '';
   document.getElementById('v-comprador').value = '';
   document.getElementById('v-notas').value     = '';
-  document.getElementById('v-fecha').value     = new Date().toISOString().split('T')[0];
+  document.getElementById('v-fecha').value     = hoyLocalISO();
   abrirModal('modal-venta');
   enfocarSiNadie('v-auto', 'modal-venta');
 }
@@ -867,8 +1044,7 @@ function abrirNuevoCliente() {
   document.getElementById('f-saldo').dataset.manual = '';       // el saldo se autocompleta hasta que lo escriban a mano
   document.getElementById('f-modalidad').disabled = false;
   document.getElementById('f-modalidad').value    = 'interes';
-  document.getElementById('f-fecha-inicio').value = new Date().toISOString().split('T')[0];
-  document.getElementById('grupo-saldo').style.display = '';
+  document.getElementById('f-fecha-inicio').value = hoyLocalISO();
   cambiarModalidad();
   abrirModal('modal-cliente');
   enfocarSiNadie('f-nombre', 'modal-cliente');
@@ -891,16 +1067,30 @@ function editarClienteActual() {
   document.getElementById('f-total-cuotas').value= c.total_cuotas||'';
   document.getElementById('f-obs').value         = c.observaciones||'';
   document.getElementById('f-fecha-inicio').value= c.fecha_inicio||'';
-  // El saldo a financiar se puede corregir solo en cuentas en cuotas (recalcula los saldos de la tabla)
-  document.getElementById('grupo-saldo').style.display = c.modalidad === 'cuotas' ? '' : 'none';
-  cambiarModalidad();
+  cambiarModalidad();   // también decide si se muestra el saldo (en cuotas se puede corregir; recalcula los saldos)
   abrirModal('modal-cliente');
 }
 
 function cambiarModalidad() {
   const m = document.getElementById('f-modalidad').value;
   document.getElementById('grupo-cuotas').style.display = m === 'cuotas' ? 'block' : 'none';
+  actualizarVisibilidadSaldo();
   if (m === 'cuotas') calcularTotalCuotas();
+}
+
+// Qué se pide según la modalidad. Así el operador no puede cargar el valor de la cuota dos veces:
+//  · interés          → se pide el saldo a financiar (solo al crear)
+//  · cuotas, nuevo    → NO se pide: el total se calcula solo (valor de UNA cuota × cantidad)
+//  · cuotas, editando → se muestra el total para poder corregirlo si quedó mal cargado
+function actualizarVisibilidadSaldo() {
+  const m = document.getElementById('f-modalidad').value;
+  const editando = !!document.getElementById('f-id').value;
+  const visible = m === 'cuotas' ? editando : !editando;
+  document.getElementById('grupo-saldo').style.display = visible ? '' : 'none';
+  document.getElementById('lbl-saldo').textContent = m === 'cuotas' ? 'Total a financiar ($)' : 'Saldo a financiar ($) *';
+  document.getElementById('hint-saldo').textContent = m === 'cuotas'
+    ? 'Normalmente es el valor de la cuota × la cantidad de cuotas. Cambialo solo si el total pactado es otro.'
+    : 'Capital que se financia (el monto pendiente después de la seña). Se le suma el 6% de interés por mes.';
 }
 
 function calcularTotalCuotas() {
@@ -910,7 +1100,7 @@ function calcularTotalCuotas() {
   if (totalEl) {
     if (cuota > 0 && cant > 0) {
       const total = cuota * cant;
-      totalEl.textContent = `Total financiado: ${fmt(total)}`;
+      totalEl.textContent = `${cant} ${cant === 1 ? 'cuota' : 'cuotas'} de ${fmt(cuota)} = Total a financiar: ${fmt(total)}`;
       totalEl.style.display = 'block';
     } else {
       totalEl.style.display = 'none';
@@ -979,6 +1169,13 @@ async function guardarCliente() {
   }
 
   if (!id && (!saldo||saldo<=0)) { toast('El saldo a financiar es obligatorio', 'err'); return; }
+
+  // Cuenta nueva en cuotas: se muestra lo que se va a guardar para que se note si algo está mal cargado
+  if (!id && modalidad === 'cuotas') {
+    const cuota = getNumVal('f-cuota');
+    const cant  = parseInt(document.getElementById('f-total-cuotas').value) || 0;
+    if (!confirm(`Vas a crear una cuenta en cuotas:\n\n• ${cant} cuotas de ${fmt(cuota)}\n• Total a financiar: ${fmt(cuota * cant)}\n\n¿Está bien?`)) return;
+  }
   const body = {
     nombre,
     telefono:        document.getElementById('f-telefono').value.trim(),

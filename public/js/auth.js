@@ -4,7 +4,12 @@
 
 function mostrarLogin() {
   document.getElementById('login-screen').classList.add('show');
-  setTimeout(() => document.getElementById('login-user').focus(), 100);
+  // Enfoca el usuario solo si todavía no empezaron a escribir (antes le robaba el cursor a quien ya iba por la contraseña)
+  setTimeout(() => {
+    const u = document.getElementById('login-user'), c = document.getElementById('login-pass');
+    const act = document.activeElement;
+    if (act !== u && act !== c && !u.value && !c.value) u.focus();
+  }, 100);
 }
 
 function entrarAlSistema(datos) {

@@ -4,7 +4,7 @@
   --rojo-dark:  #b71c1c;
   --rojo-light: #fdecea;
   --negro:      #1a2744;
-  --bg:         #bfc3c9;
+  --bg:         #e9edf4;
   --surface:    #ffffff;
   --surface2:   #f8f9fb;
   --border:     #e2e5ea;
@@ -113,7 +113,8 @@ a { text-decoration: none; color: inherit; }
 .topbar-title { font-weight: 700; font-size: .9rem; color: var(--text-muted); }
 
 /* PAGES */
-.page { display: none; padding: 1.75rem; max-width: 1080px; }
+.page { display: none; padding: 1.75rem; width: 100%; max-width: 1200px; margin: 0 auto; }   /* centrado, aprovecha pantallas anchas */
+#page-dashboard { max-width: 1560px; }
 .page.active { display: block; }
 .page-header {
   display: flex; align-items: center; gap: 1rem;
@@ -527,3 +528,147 @@ a { text-decoration: none; color: inherit; }
   background: #fff7ed; border: 1.5px solid #fdba74; color: #7c2d12;
 }
 #f-saldo-aviso button { margin-top: .4rem; display: block; }
+
+/* ═══ PANEL GENERAL ════════════════════════════════════════════ */
+.dash-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.3rem; }
+.dash-titulo { font-size: 1.7rem; font-weight: 800; color: var(--negro); letter-spacing: -.5px; line-height: 1.1; }
+.dash-fecha { font-size: .9rem; color: #5b6472; margin-top: .3rem; }
+
+.dash-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 1.1rem; }
+.g-hero { grid-column: span 8; } .g-mora { grid-column: span 4; } .g-tile { grid-column: span 4; }
+.g-chart { grid-column: span 7; } .g-mod { grid-column: span 5; }
+.g-lmora { grid-column: span 7; } .g-lsald { grid-column: span 5; } .g-full { grid-column: 1 / -1; }
+@media (max-width: 1180px) {
+  .g-hero, .g-mora, .g-chart, .g-mod, .g-lmora, .g-lsald { grid-column: 1 / -1; }
+}
+@media (max-width: 760px) { .g-tile { grid-column: 1 / -1; } }
+
+/* entrada suave de las tarjetas */
+@keyframes subir { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.dash-grid > * { animation: subir .55s ease both; }
+.dash-grid > *:nth-child(2) { animation-delay: .06s; } .dash-grid > *:nth-child(3) { animation-delay: .12s; }
+.dash-grid > *:nth-child(4) { animation-delay: .18s; } .dash-grid > *:nth-child(5) { animation-delay: .24s; }
+@media (prefers-reduced-motion: reduce) { .dash-grid > * { animation: none; } }
+
+/* ── Tarjeta principal: saldo a cobrar ── */
+.hero {
+  position: relative; overflow: hidden; cursor: pointer; color: #fff; border-radius: 22px; padding: 1.7rem 1.9rem 1.5rem;
+  background: radial-gradient(120% 140% at 100% 0%, #3d5fc0 0%, rgba(61,95,192,0) 55%),
+              linear-gradient(135deg, #131d38 0%, #1a2744 45%, #22346a 100%);
+  box-shadow: 0 14px 34px rgba(26,39,68,.28); transition: transform .18s, box-shadow .18s;
+}
+.hero:hover { transform: translateY(-2px); box-shadow: 0 18px 42px rgba(26,39,68,.34); }
+.hero::after { content: ''; position: absolute; right: -80px; bottom: -110px; width: 280px; height: 280px; border-radius: 50%;
+               background: rgba(217,43,43,.30); filter: blur(14px); pointer-events: none; }
+.hero > * { position: relative; z-index: 1; }
+.hero-chip { display: inline-flex; align-items: center; gap: .5rem; padding: .35rem .85rem; border-radius: 999px;
+             background: rgba(255,255,255,.13); font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.hero-chip svg { width: 15px; height: 15px; }
+.hero-num { font-size: clamp(2.4rem, 4.2vw, 3.9rem); font-weight: 800; letter-spacing: -1.2px; line-height: 1.05; margin: .95rem 0 .3rem; overflow-wrap: anywhere; }
+.hero-sub { font-size: .95rem; color: rgba(255,255,255,.78); }
+.hero-bar { height: 12px; border-radius: 999px; background: rgba(255,255,255,.16); overflow: hidden; margin-top: 1.15rem; }
+.hero-bar-fill { height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, #4ade80, #bef264);
+                 box-shadow: 0 0 14px rgba(190,242,100,.55); transition: width .8s ease; }
+.hero-bar-lbl { font-size: .82rem; font-weight: 700; margin-top: .45rem; color: rgba(255,255,255,.88); }
+.hero-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin-top: 1.3rem; padding-top: 1.1rem; border-top: 1px solid rgba(255,255,255,.16); }
+.hero-stats span { display: block; font-size: .68rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: rgba(255,255,255,.62); }
+.hero-stats strong { display: block; font-size: 1.3rem; font-weight: 800; margin-top: .2rem; overflow-wrap: anywhere; }
+.hero-stats small { display: block; font-size: .75rem; color: rgba(255,255,255,.62); margin-top: .1rem; }
+@media (max-width: 560px) { .hero-stats { grid-template-columns: 1fr; gap: .7rem; } }
+
+/* ── Tarjeta de mora ── */
+.mora-card {
+  position: relative; display: flex; flex-direction: column; cursor: pointer; border-radius: 22px; padding: 1.6rem 1.7rem 1.4rem;
+  background: linear-gradient(165deg, #ffffff 0%, #fff0f0 100%); border: 1.5px solid #f9c5c5;
+  box-shadow: 0 10px 28px rgba(217,43,43,.13); transition: transform .18s, box-shadow .18s;
+}
+.mora-card:hover { transform: translateY(-2px); box-shadow: 0 14px 34px rgba(217,43,43,.19); }
+.mora-card.ok { background: linear-gradient(165deg, #ffffff 0%, #effcf3 100%); border-color: #b5ecc6; box-shadow: 0 10px 28px rgba(22,163,74,.13); }
+.mora-top { display: flex; align-items: center; gap: .75rem; }
+.mora-icono { width: 46px; height: 46px; border-radius: 15px; display: flex; align-items: center; justify-content: center; background: #fddede; color: #D92B2B; }
+.mora-card.ok .mora-icono { background: #d3f4de; color: #16a34a; }
+.mora-icono svg { width: 24px; height: 24px; }
+.mora-lbl { font-size: .74rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; color: #6b7280; }
+.mora-num { font-size: 3.5rem; font-weight: 800; line-height: 1; color: #D92B2B; margin: .9rem 0 .4rem; letter-spacing: -1px; }
+.mora-card.ok .mora-num { color: #16a34a; }
+.mora-sub { font-size: .92rem; color: #4b5563; line-height: 1.4; }
+.mora-link { margin-top: auto; padding-top: 1rem; font-size: .83rem; font-weight: 800; color: #D92B2B; }
+.mora-card.ok .mora-link { color: #16a34a; }
+
+.mora-top3 { margin-top: 1.1rem; }
+.mora-top3-t { font-size: .68rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #9ca3af; margin-bottom: .2rem; }
+.mora-fila { display: flex; align-items: center; justify-content: space-between; gap: .6rem; padding: .5rem .6rem; margin: 0 -.6rem; border-radius: 10px; font-size: .86rem; cursor: pointer; transition: background .15s; }
+.mora-fila:hover { background: rgba(217,43,43,.09); }
+.mora-fila .n { font-weight: 700; color: #1f2937; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.mora-fila .d { flex: none; font-size: .72rem; font-weight: 800; color: #991b1b; background: #fee2e2; border: 1.5px solid #fca5a5; border-radius: 999px; padding: .1rem .6rem; }
+
+.kpi-chips { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .75rem; }
+.kpi-chip { font-size: .7rem; font-weight: 800; padding: .18rem .65rem; border-radius: 20px; border: 1.5px solid; }
+.kpi-chip.leve  { background: #fef9c3; color: #854d0e; border-color: #fde047; }
+.kpi-chip.media { background: #ffedd5; color: #9a3412; border-color: #fb923c; }
+.kpi-chip.grave { background: #fee2e2; color: #991b1b; border-color: #f87171; }
+
+/* ── Tarjetas chicas ── */
+.tile {
+  --acc: #64748b; --acc-bg: #e2e8f0;
+  display: flex; align-items: center; gap: 1rem; cursor: pointer; background: var(--surface); border: 1px solid #e3e7ee;
+  border-radius: 18px; padding: 1.15rem 1.3rem; box-shadow: 0 2px 10px rgba(26,39,68,.06);
+  transition: transform .18s, box-shadow .18s, border-color .18s;
+}
+.tile:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(26,39,68,.12); border-color: var(--acc); }
+.kpi-activos    { --acc: #2563eb; --acc-bg: #dbeafe; }
+.kpi-saldadas   { --acc: #0d9488; --acc-bg: #ccfbf1; }
+.kpi-archivadas { --acc: #64748b; --acc-bg: #e2e8f0; }
+.tile-icon { flex: none; width: 54px; height: 54px; border-radius: 17px; display: flex; align-items: center; justify-content: center; background: var(--acc-bg); color: var(--acc); }
+.tile-icon svg { width: 27px; height: 27px; }
+.tile-lbl { font-size: .72rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; color: #6b7280; }
+.tile-num { font-size: 2.1rem; font-weight: 800; line-height: 1.1; color: var(--negro); }
+.tile-sub { font-size: .8rem; color: #6b7280; margin-top: .1rem; line-height: 1.3; }
+
+/* ── Paneles (gráfico, modalidad, listas) ── */
+.panel-card { background: #fff; border: 1px solid #e3e7ee; border-radius: 20px; padding: 1.3rem 1.5rem; box-shadow: 0 2px 10px rgba(26,39,68,.06); min-width: 0; }
+.panel-titulo { font-weight: 800; font-size: 1rem; color: var(--negro); margin-bottom: 1rem; display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; }
+.panel-nota { font-size: .74rem; font-weight: 600; color: #6b7280; }
+.g-chart { display: flex; flex-direction: column; }
+.g-chart #dash-chart { flex: 1; display: flex; align-items: center; }   /* el gráfico queda centrado si la tarjeta de al lado es más alta */
+
+.chart-lbl { font-size: 12px; fill: #4b5563; font-weight: 600; }
+.chart-val { font-size: 11px; fill: #1a2744; font-weight: 800; }
+.chart-bar { fill: url(#gradBar); }
+.chart-bar.actual { fill: url(#gradActual); }
+.chart-base { stroke: #cfd5df; stroke-width: 1; }
+.chart-grid { stroke: #e8ebf1; stroke-width: 1; stroke-dasharray: 4 5; }
+
+.stack { display: flex; height: 16px; border-radius: 10px; overflow: hidden; background: #e5e7eb; margin-bottom: 1rem; }
+.stack-seg { height: 100%; transition: width .7s ease; }
+.seg-cuotas  { background: linear-gradient(90deg, #3b82f6, #2563eb); }
+.seg-interes { background: linear-gradient(90deg, #f59e0b, #d97706); }
+.sub-titulo { margin: 1.4rem 0 .75rem; font-size: .72rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; color: #6b7280; }
+.seg-aldia { background: linear-gradient(90deg, #4ade80, #16a34a); }
+.seg-mora  { background: linear-gradient(90deg, #f87171, #D92B2B); }
+.seg-sald  { background: linear-gradient(90deg, #2dd4bf, #0d9488); }
+.leg-row { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .7rem 0; border-top: 1px solid #edf0f5; font-size: .9rem; }
+.leg-row:first-of-type { border-top: none; }
+.leg-nom { display: flex; align-items: center; gap: .55rem; font-weight: 700; color: var(--negro); }
+.leg-dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+.leg-det { text-align: right; line-height: 1.25; }
+.leg-det strong { display: block; color: var(--negro); font-size: 1rem; }
+.leg-det span { font-size: .76rem; color: #6b7280; }
+
+.mora-scroll { max-height: 440px; overflow: auto; }
+.fila-click { cursor: pointer; }
+.fila-click:hover td { background: #f3f6fb; }
+.dias-badge { display: inline-block; padding: .15rem .65rem; border-radius: 20px; font-size: .72rem; font-weight: 800; border: 1.5px solid; white-space: nowrap; }
+.dias-badge.leve  { background: #fef9c3; color: #854d0e; border-color: #fde047; }
+.dias-badge.media { background: #ffedd5; color: #9a3412; border-color: #fb923c; }
+.dias-badge.grave { background: #fee2e2; color: #991b1b; border-color: #f87171; }
+.dash-vacio { padding: 1.1rem .25rem; font-size: .92rem; color: #6b7280; font-weight: 600; }
+
+.dash-seccion { font-size: .78rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; color: #5b6472; margin: 1.6rem 0 .8rem; }
+#dashboard-clientes { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: .85rem; }
+@media (max-width: 480px) { #dashboard-clientes { grid-template-columns: 1fr; } }
+
+/* mensaje de ayuda del formulario de cuotas */
+.aviso-cuotas { background: #fff7ed; border: 1.5px solid #fdba74; color: #7c2d12; border-radius: 10px;
+                padding: .7rem .9rem; font-size: .85rem; line-height: 1.4; margin-bottom: .85rem; }
+.aviso-cuotas-ej { margin-top: .3rem; font-size: .8rem; }
